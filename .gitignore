@@ -1,0 +1,50 @@
+# Git ignore configuration for AfriMesh-AI
+.env
+.env.*
+!.env.example
+.kaggle/
+kaggle.json
+
+# Python caches and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Datasets and Models
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+models/*
+!models/.gitkeep
+*.gguf
+*.bin
+*.safetensors
+*.pt
+*.onnx
+
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
