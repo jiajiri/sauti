@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -17,43 +18,42 @@ import com.sauti.app.ui.theme.*
 
 @Composable
 fun HardwareTelemetryCard(
-    chipArch: String = "ARM64-v8a (NEON)",
-    usableRamGb: String = "3.2 GB / 4.0 GB",
-    activeQuantization: String = "INT8 / Q4_0",
+    chipArch: String = "ARM64-v8a (NEON SIMD)",
+    usableRamGb: String = "3.1 GB / 4.0 GB",
+    activeQuantization: String = "Q4_K_M (INT8 ASR)",
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(SurfaceDark)
-            .border(1.dp, BorderDark, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(10.dp))
+            .background(SurfaceCard)
+            .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
             .padding(16.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "DEVICE AI TELEMETRY",
-                    color = TextSecondary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
+                    text = "HARDWARE & INFERENCE TELEMETRY",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextMuted
                 )
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(AccentEmerald.copy(alpha = 0.15f))
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(StatusNominal.copy(alpha = 0.12f))
+                        .border(1.dp, StatusNominal.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = "100% OFFLINE",
-                        color = AccentEmerald,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
+                        text = "100% SOVEREIGN OFFLINE",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = StatusNominal,
+                        fontSize = 9.sp
                     )
                 }
             }
@@ -62,9 +62,9 @@ fun HardwareTelemetryCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                TelemetryItem(label = "Architecture", value = chipArch)
-                TelemetryItem(label = "RAM Usable", value = usableRamGb)
-                TelemetryItem(label = "Quantization", value = activeQuantization)
+                TelemetryItem(label = "CPU INSTRUCTIONS", value = chipArch)
+                TelemetryItem(label = "MEMORY COMMITTED", value = usableRamGb)
+                TelemetryItem(label = "PRECISION TENSOR", value = activeQuantization)
             }
         }
     }
@@ -73,13 +73,19 @@ fun HardwareTelemetryCard(
 @Composable
 private fun TelemetryItem(label: String, value: String) {
     Column {
-        Text(text = label, color = TextMuted, fontSize = 11.sp)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = TextMuted,
+            fontSize = 9.sp
+        )
         Text(
             text = value,
-            color = TextPrimary,
-            fontSize = 12.sp,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.SemiBold
+            ),
+            color = TextPrimary
         )
     }
 }
