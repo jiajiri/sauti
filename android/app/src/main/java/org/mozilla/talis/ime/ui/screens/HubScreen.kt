@@ -2,10 +2,10 @@ package com.sauti.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -15,21 +15,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.sauti.app.ui.components.HardwareTelemetryCard
 import com.sauti.app.ui.components.SkeletonCard
 import com.sauti.app.ui.theme.*
 
-data class SovereignModelEntry(
+data class ClinicEnginePackage(
     val id: String,
     val name: String,
-    val role: String,
-    val quantization: String,
-    val memoryFootprint: String,
-    val status: String // ACTIVE, LOADED, ON_DISK
+    val purpose: String,
+    val storageSize: String,
+    val status: String // ACTIVE, LOADED, READY
 )
 
 @Composable
@@ -37,47 +33,42 @@ fun HubScreen(
     isLoading: Boolean = false,
     onToggleSkeleton: () -> Unit = {}
 ) {
-    var models by remember {
+    var packages by remember {
         mutableStateOf(
             listOf(
-                SovereignModelEntry(
-                    id = "tier1_qwen",
-                    name = "Qwen 2.5 1.5B Instruct GGUF",
-                    role = "Tier 1 Micro-Edge Clinical Reasoning",
-                    quantization = "Q4_K_M (4-bit)",
-                    memoryFootprint = "1.1 GB RAM",
+                ClinicEnginePackage(
+                    id = "pkg_coldchain",
+                    name = "Vaccine Cold-Chain Safety Engine",
+                    purpose = "Calculates WHO PQS vaccine degradation and cold storage rules completely offline.",
+                    storageSize = "1.1 GB (On Device)",
                     status = "ACTIVE"
                 ),
-                SovereignModelEntry(
-                    id = "whisper_asr",
-                    name = "Offline Whisper ASR Core",
-                    role = "Swahili & Sheng Speech-to-Text",
-                    quantization = "INT8 NEON SIMD",
-                    memoryFootprint = "43.2 MB RAM",
+                ClinicEnginePackage(
+                    id = "pkg_voice",
+                    name = "Swahili & English Clinical Voice Recognition",
+                    purpose = "Transcribes rural healthcare dictations directly on device with zero internet.",
+                    storageSize = "43 MB (On Device)",
                     status = "LOADED"
                 ),
-                SovereignModelEntry(
-                    id = "tier2_llama",
-                    name = "Llama-2-7B-Guanaco Regional",
-                    role = "Tier 2 Hospital Server Hub Model",
-                    quantization = "Q4_K_M (4-bit)",
-                    memoryFootprint = "4.1 GB RAM",
-                    status = "ON_DISK"
+                ClinicEnginePackage(
+                    id = "pkg_triage",
+                    name = "MOH Clinical Protocol Reference Corpus",
+                    purpose = "Authentic East African health guidelines, immunizations, and triage standards.",
+                    storageSize = "280 MB (On Device)",
+                    status = "READY"
                 )
             )
         )
     }
 
-    var gatewayEndpoint by remember { mutableStateOf("http://127.0.0.1:8000") }
-    var gatewayStatus by remember { mutableStateOf("CONNECTED (Local Daemon)") }
-    var isCheckingGateway by remember { mutableStateOf(false) }
+    var localServerStatus by remember { mutableStateOf("Connected (Hospital Local Server)") }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(BackgroundMatte)
     ) {
-        // Top Header
+        // Clean Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -87,12 +78,12 @@ fun HubScreen(
         ) {
             Column {
                 Text(
-                    text = "EDGE APPLIANCE HUB",
+                    text = "CLINIC SYSTEM OVERVIEW",
                     style = MaterialTheme.typography.labelSmall,
                     color = TextMuted
                 )
                 Text(
-                    text = "System Telemetry & GGUF Models",
+                    text = "Device & Storage Health",
                     style = MaterialTheme.typography.titleLarge,
                     color = TextPrimary
                 )
@@ -107,7 +98,7 @@ fun HubScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
-                    contentDescription = "Simulate Loading Skeleton",
+                    contentDescription = "Simulate Loading Placeholder",
                     tint = PrimaryBlue
                 )
             }
@@ -132,12 +123,7 @@ fun HubScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
-                // Real Hardware Telemetry Card
-                item {
-                    HardwareTelemetryCard()
-                }
-
-                // Gateway Daemon Connection Card
+                // Device Safety Status Card
                 item {
                     Box(
                         modifier = Modifier
@@ -147,14 +133,14 @@ fun HubScreen(
                             .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
                             .padding(16.dp)
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "FASTAPI SOVEREIGN GATEWAY",
+                                    text = "OFFLINE PRIVACY & INTEGRITY",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = TextMuted
                                 )
@@ -166,7 +152,7 @@ fun HubScreen(
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        text = gatewayStatus,
+                                        text = "100% PRIVATE & OFFLINE",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = StatusNominal,
                                         fontSize = 9.sp
@@ -176,39 +162,27 @@ fun HubScreen(
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text(
-                                    text = gatewayEndpoint,
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                                    color = TextPrimary
-                                )
-
-                                TextButton(
-                                    onClick = {
-                                        gatewayStatus = "PING: 2ms (Nominal)"
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                                ) {
-                                    Text("Test Ping", style = MaterialTheme.typography.labelMedium, color = PrimaryBlue)
+                                Column {
+                                    Text(text = "DATA BOUNDARY", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                    Text(text = "Local Clinic Only", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                                }
+                                Column {
+                                    Text(text = "DEVICE MEMORY", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                    Text(text = "Safe & Responsive", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                                }
+                                Column {
+                                    Text(text = "BATTERY PROFILE", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                    Text(text = "Eco Low-Drain", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
                                 }
                             }
                         }
                     }
                 }
 
+                // Local Server Connection Status Card
                 item {
-                    Text(
-                        text = "ON-DEVICE GGUF TENSOR MODELS",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-
-                // Model Cards
-                items(models) { model ->
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -224,15 +198,76 @@ fun HubScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = model.name,
+                                    text = "LOCAL CLINIC SERVER",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextMuted
+                                )
+                                Text(
+                                    text = "Active Local Link",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = StatusNominal
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = localServerStatus,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TextPrimary
+                                )
+
+                                TextButton(
+                                    onClick = {
+                                        localServerStatus = "Checked Just Now (Ready)"
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                ) {
+                                    Text("Verify Sync", style = MaterialTheme.typography.labelMedium, color = PrimaryBlue)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Text(
+                        text = "INSTALLED CLINICAL INTELLIGENCE PACKAGES",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+
+                // Packages List
+                items(packages) { pkg ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(SurfaceCard)
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                            .padding(16.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = pkg.name,
                                     style = MaterialTheme.typography.titleMedium,
                                     color = TextPrimary
                                 )
-                                ModelStatusBadge(status = model.status)
+                                PackageBadge(status = pkg.status)
                             }
 
                             Text(
-                                text = model.role,
+                                text = pkg.purpose,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextSecondary
                             )
@@ -244,31 +279,24 @@ fun HubScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                    Column {
-                                        Text(text = "QUANTIZATION", style = MaterialTheme.typography.labelSmall, color = TextMuted, fontSize = 9.sp)
-                                        Text(text = model.quantization, style = MaterialTheme.typography.bodySmall, color = TextPrimary)
-                                    }
-                                    Column {
-                                        Text(text = "FOOTPRINT", style = MaterialTheme.typography.labelSmall, color = TextMuted, fontSize = 9.sp)
-                                        Text(text = model.memoryFootprint, style = MaterialTheme.typography.bodySmall, color = TextPrimary)
-                                    }
-                                }
+                                Text(
+                                    text = "Storage: ${pkg.storageSize}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextMuted
+                                )
 
-                                if (model.status != "ACTIVE") {
-                                    OutlinedButton(
+                                if (pkg.status != "ACTIVE") {
+                                    TextButton(
                                         onClick = {
-                                            models = models.map {
-                                                if (it.id == model.id) it.copy(status = "ACTIVE")
-                                                else if (it.status == "ACTIVE" && it.id.startsWith("tier")) it.copy(status = "LOADED")
+                                            packages = packages.map {
+                                                if (it.id == pkg.id) it.copy(status = "ACTIVE")
+                                                else if (it.status == "ACTIVE" && it.id.startsWith("pkg_cold")) it.copy(status = "READY")
                                                 else it
                                             }
                                         },
-                                        shape = RoundedCornerShape(6.dp),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                                     ) {
-                                        Text("Bind Active", style = MaterialTheme.typography.labelSmall, color = PrimaryBlue)
+                                        Text("Set Primary", style = MaterialTheme.typography.labelSmall, color = PrimaryBlue)
                                     }
                                 }
                             }
@@ -281,7 +309,7 @@ fun HubScreen(
 }
 
 @Composable
-private fun ModelStatusBadge(status: String) {
+private fun PackageBadge(status: String) {
     val (badgeBg, badgeBorder, badgeText) = when (status) {
         "ACTIVE" -> Triple(StatusNominal.copy(alpha = 0.12f), StatusNominal.copy(alpha = 0.4f), StatusNominal)
         "LOADED" -> Triple(PrimaryBlue.copy(alpha = 0.12f), PrimaryBlue.copy(alpha = 0.4f), PrimaryBlue)

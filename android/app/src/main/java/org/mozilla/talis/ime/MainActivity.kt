@@ -2,14 +2,16 @@ package com.sauti.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.animation.*
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Forum
-import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.*
@@ -34,12 +36,19 @@ class MainActivity : ComponentActivity() {
                 var showVoiceMode by remember { mutableStateOf(false) }
                 var isGlobalLoading by remember { mutableStateOf(false) }
 
+                // Hardware Back Handler: return to initial tab if on other tabs
+                if (!showVoiceMode && selectedTab != 0) {
+                    BackHandler {
+                        selectedTab = 0
+                    }
+                }
+
                 if (showVoiceMode) {
                     VoiceModeScreen(
                         onCloseClick = { showVoiceMode = false },
                         onSubmitTriageQuery = {
                             showVoiceMode = false
-                            selectedTab = 1 // Switch to HITL / triage review
+                            selectedTab = 1 // Smooth switch to Approvals tab
                         }
                     )
                 } else {
@@ -54,7 +63,7 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Mic,
-                                    contentDescription = "Voice Dictation Triage",
+                                    contentDescription = "Voice Dictation",
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
@@ -70,10 +79,10 @@ class MainActivity : ComponentActivity() {
                                     icon = {
                                         Icon(
                                             imageVector = Icons.Default.AcUnit,
-                                            contentDescription = "Cold Chain"
+                                            contentDescription = "Refrigeration"
                                         )
                                     },
-                                    label = { Text("Cold Chain") },
+                                    label = { Text("Refrigeration") },
                                     colors = NavigationBarItemDefaults.colors(
                                         indicatorColor = PrimaryBlue.copy(alpha = 0.2f),
                                         selectedIconColor = PrimaryBlue,
@@ -88,7 +97,7 @@ class MainActivity : ComponentActivity() {
                                     icon = {
                                         Icon(
                                             imageVector = Icons.Default.VerifiedUser,
-                                            contentDescription = "HITL Reviews"
+                                            contentDescription = "Approvals"
                                         )
                                     },
                                     label = { Text("Approvals") },
@@ -123,11 +132,11 @@ class MainActivity : ComponentActivity() {
                                     onClick = { selectedTab = 3 },
                                     icon = {
                                         Icon(
-                                            imageVector = Icons.Default.Memory,
-                                            contentDescription = "Hardware Hub"
+                                            imageVector = Icons.Default.HealthAndSafety,
+                                            contentDescription = "Clinic Hub"
                                         )
                                     },
-                                    label = { Text("Hub") },
+                                    label = { Text("Clinic Hub") },
                                     colors = NavigationBarItemDefaults.colors(
                                         indicatorColor = PrimaryBlue.copy(alpha = 0.2f),
                                         selectedIconColor = PrimaryBlue,
@@ -145,27 +154,35 @@ class MainActivity : ComponentActivity() {
                                 .padding(innerPadding),
                             color = BackgroundMatte
                         ) {
-                            when (selectedTab) {
-                                0 -> ColdChainScreen(
-                                    isLoading = isGlobalLoading,
-                                    onNavigateToHitl = { selectedTab = 1 },
-                                    onLogExcursionAlert = { _, _, _ ->
-                                        selectedTab = 1
-                                    }
-                                )
-                                1 -> HitlScreen(
-                                    isLoading = isGlobalLoading
-                                )
-                                2 -> ChatScreen(
-                                    isLoading = isGlobalLoading,
-                                    onVoiceClick = { showVoiceMode = true }
-                                )
-                                3 -> HubScreen(
-                                    isLoading = isGlobalLoading,
-                                    onToggleSkeleton = {
-                                        isGlobalLoading = !isGlobalLoading
-                                    }
-                                )
+                            AnimatedContent(
+                                targetState = selectedTab,
+                                transitionSpec = {
+                                    fadeIn() togetherWith fadeOut()
+                                },
+                                label = "TabNavigationTransition"
+                            ) { tabIndex ->
+                                when (tabIndex) {
+                                    0 -> ColdChainScreen(
+                                        isLoading = isGlobalLoading,
+                                        onNavigateToHitl = { selectedTab = 1 },
+                                        onLogExcursionAlert = { _, _, _ ->
+                                            selectedTab = 1
+                                        }
+                                    )
+                                    1 -> HitlScreen(
+                                        isLoading = isGlobalLoading
+                                    )
+                                    2 -> ChatScreen(
+                                        isLoading = isGlobalLoading,
+                                        onVoiceClick = { showVoiceMode = true }
+                                    )
+                                    3 -> HubScreen(
+                                        isLoading = isGlobalLoading,
+                                        onToggleSkeleton = {
+                                            isGlobalLoading = !isGlobalLoading
+                                        }
+                                    )
+                                }
                             }
                         }
                     }

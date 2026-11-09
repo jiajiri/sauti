@@ -1,13 +1,19 @@
 package com.sauti.app.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,21 +30,21 @@ import com.sauti.app.ui.theme.*
 data class HitlReviewItem(
     val reviewId: Int,
     val staffId: String,
+    val staffTitle: String,
     val query: String,
     val proposedAction: String,
     val riskLevel: String,
-    val sha256AuditDigest: String,
     val status: String, // PENDING, APPROVED, REJECTED
     val createdAt: String,
     val reviewerNotes: String? = null,
-    val decayIndex: Double? = null
+    val verificationSeal: String = "SEAL-SHA256-VERIFIED"
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HitlScreen(
     isLoading: Boolean = false,
-    supervisorId: String = "dr_kagame"
+    supervisorId: String = "Dr. Kagame (Chief Medical Officer)"
 ) {
     var selectedFilter by remember { mutableStateOf("ALL") }
     var reviewQueue by remember {
@@ -47,44 +52,41 @@ fun HitlScreen(
             listOf(
                 HitlReviewItem(
                     reviewId = 104,
-                    staffId = "nurse_mariam",
-                    query = "Solar battery failed at 02:00. Fridge temperature reached 19.2°C for 6 hours. Emergency discard required for OPV batch #TZ-884?",
-                    proposedAction = "Quarantine Oral Polio Vaccine (OPV) batch #TZ-884. Arrhenius thermal decay index calculated at 1.18 (exceeds threshold 1.0). Immediate disposal sanctioned under WHO PQS E003 protocol.",
-                    riskLevel = "CRITICAL_ACTION",
-                    sha256AuditDigest = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+                    staffId = "Nurse Mariam",
+                    staffTitle = "Dispensary Unit In-Charge",
+                    query = "Solar battery failed overnight. Refrigerator reached 19.2°C for 6 hours. Emergency discard required for Oral Polio Vaccine (OPV) batch #TZ-884?",
+                    proposedAction = "Quarantine Oral Polio Vaccine (OPV) batch #TZ-884. Safe thermal duration has been exceeded under WHO PQS cold chain protocols. Disposal authorization requested.",
+                    riskLevel = "CRITICAL ACTION",
                     status = "PENDING",
-                    createdAt = "Today, 06:14 AM",
-                    decayIndex = 1.18
+                    createdAt = "Today, 06:14 AM"
                 ),
                 HitlReviewItem(
                     reviewId = 103,
-                    staffId = "clinician_omari",
-                    query = "Thermostat stuck below freezing (-1.4°C for 2 hours). Should Hepatitis B vials be saved?",
-                    proposedAction = "Conduct Shake Test protocol immediately. Hepatitis B is strictly freeze-sensitive. If sedimentation forms flocculant granules within 15 minutes, decommission batch #HB-402.",
-                    riskLevel = "CRITICAL_ACTION",
-                    sha256AuditDigest = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    staffId = "Clinician Omari",
+                    staffTitle = "Maternity Health Officer",
+                    query = "Thermostat froze below freezing point (-1.4°C for 2 hours). Can Hepatitis B vials still be administered safely?",
+                    proposedAction = "Perform Shake Test immediately. Hepatitis B is sensitive to freezing. If sedimentation occurs within 15 minutes, decommission batch #HB-402.",
+                    riskLevel = "CRITICAL ACTION",
                     status = "PENDING",
-                    createdAt = "Today, 04:30 AM",
-                    decayIndex = 0.45
+                    createdAt = "Today, 04:30 AM"
                 ),
                 HitlReviewItem(
                     reviewId = 101,
-                    staffId = "nurse_mariam",
-                    query = "Sub-dispensary power cut scheduled for 3 hours. BCG vaccine excursion mitigation plan.",
-                    proposedAction = "Relocate BCG vials to conditioned water-pack cold box (WHO PQS E004). No chemical disposal warranted.",
-                    riskLevel = "ACTION_PROPOSED",
-                    sha256AuditDigest = "bc92d192809f0f9b6b80153be992c6b45a0b4d4b1f4142f7c00e57f5c531d279",
+                    staffId = "Nurse Mariam",
+                    staffTitle = "Dispensary Unit In-Charge",
+                    query = "Scheduled maintenance power outage for 3 hours. Action plan for BCG vaccine vials.",
+                    proposedAction = "Move BCG vials into pre-conditioned vaccine cold box with ice-packs. Chemical disposal is not warranted.",
+                    riskLevel = "STANDARD MITIGATION",
                     status = "APPROVED",
                     createdAt = "Yesterday, 14:20 PM",
-                    reviewerNotes = "Cold box conditioning confirmed. Temperature logged at +3.8°C.",
-                    decayIndex = 0.12
+                    reviewerNotes = "Cold box transfer confirmed. Temperature maintained at +3.8°C."
                 )
             )
         )
     }
 
-    var activeReviewItem by remember { mutableStateOf<HitlReviewItem?>(null) }
-    var reviewRationaleNotes by remember { mutableStateOf("") }
+    var selectedReviewForDetail by remember { mutableStateOf<HitlReviewItem?>(null) }
+    var supervisorNotesInput by remember { mutableStateOf("") }
 
     val filteredList = remember(reviewQueue, selectedFilter) {
         when (selectedFilter) {
@@ -95,267 +97,339 @@ fun HitlScreen(
         }
     }
 
+    // Hardware Back Handler for Review Detail View
+    if (selectedReviewForDetail != null) {
+        BackHandler {
+            selectedReviewForDetail = null
+        }
+    }
+
+    AnimatedVisibility(
+        visible = selectedReviewForDetail != null,
+        enter = fadeIn(),
+        exit = fadeOut()
+    ) {
+        selectedReviewForDetail?.let { item ->
+            ReviewDetailView(
+                item = item,
+                notesInput = supervisorNotesInput,
+                onNotesChange = { supervisorNotesInput = it },
+                onBack = { selectedReviewForDetail = null },
+                onAuthorize = {
+                    reviewQueue = reviewQueue.map {
+                        if (it.reviewId == item.reviewId) {
+                            it.copy(
+                                status = "APPROVED",
+                                reviewerNotes = supervisorNotesInput.ifBlank { "Disposal authorized by Chief Medical Officer under WHO guidelines." }
+                            )
+                        } else it
+                    }
+                    selectedReviewForDetail = null
+                },
+                onReject = {
+                    reviewQueue = reviewQueue.map {
+                        if (it.reviewId == item.reviewId) {
+                            it.copy(
+                                status = "REJECTED",
+                                reviewerNotes = supervisorNotesInput.ifBlank { "Action rejected. Proceed with physical vial stability re-testing." }
+                            )
+                        } else it
+                    }
+                    selectedReviewForDetail = null
+                }
+            )
+        }
+    }
+
+    AnimatedVisibility(
+        visible = selectedReviewForDetail == null,
+        enter = fadeIn(),
+        exit = fadeOut()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(BackgroundMatte)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "CLINICAL SUPERVISOR DESK",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted
+                    )
+                    Text(
+                        text = "Action Authorizations",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = TextPrimary
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(PrimaryBlue.copy(alpha = 0.12f))
+                        .border(1.dp, PrimaryBlue.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "Auditor Active",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = PrimaryBlue
+                    )
+                }
+            }
+
+            // Filter Tabs
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("ALL", "PENDING", "APPROVED", "REJECTED").forEach { filter ->
+                    val isSel = selectedFilter == filter
+                    val count = when (filter) {
+                        "PENDING" -> reviewQueue.count { it.status == "PENDING" }
+                        "APPROVED" -> reviewQueue.count { it.status == "APPROVED" }
+                        "REJECTED" -> reviewQueue.count { it.status == "REJECTED" }
+                        else -> reviewQueue.size
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (isSel) PrimaryBlue else SurfaceCard)
+                            .border(1.dp, if (isSel) PrimaryBlue else BorderSubtle, RoundedCornerShape(6.dp))
+                            .clickable { selectedFilter = filter }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "$filter ($count)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isSel) TextPrimary else TextSecondary
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            if (isLoading) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    SkeletonCard(height = 140.dp)
+                    SkeletonCard(height = 140.dp)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp)
+                ) {
+                    items(filteredList) { item ->
+                        CleanHitlCard(
+                            item = item,
+                            onClick = {
+                                selectedReviewForDetail = item
+                                supervisorNotesInput = item.reviewerNotes ?: ""
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ReviewDetailView(
+    item: HitlReviewItem,
+    notesInput: String,
+    onNotesChange: (String) -> Unit,
+    onBack: () -> Unit,
+    onAuthorize: () -> Unit,
+    onReject: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(BackgroundMatte)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
+        // Top Navigation with Back Arrow
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(SurfaceCard)
+                    .border(1.dp, BorderSubtle, CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = TextPrimary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "HUMAN-IN-THE-LOOP SAFETY GATE",
+                    text = "REQUEST #${item.reviewId}",
                     style = MaterialTheme.typography.labelSmall,
                     color = TextMuted
                 )
                 Text(
-                    text = "Clinical Supervisor Sign-Off",
+                    text = "Authorization Review",
                     style = MaterialTheme.typography.titleLarge,
                     color = TextPrimary
                 )
             }
 
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(PrimaryBlue.copy(alpha = 0.12f))
-                    .border(1.dp, PrimaryBlue.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = supervisorId,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = PrimaryBlue
-                )
-            }
+            StatusBadge(status = item.status)
         }
 
-        // Filter Tabs
-        Row(
+        // Details Container
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(SurfaceCard)
+                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
+                .padding(18.dp)
         ) {
-            listOf("ALL", "PENDING", "APPROVED", "REJECTED").forEach { filter ->
-                val isSel = selectedFilter == filter
-                val count = when (filter) {
-                    "PENDING" -> reviewQueue.count { it.status == "PENDING" }
-                    "APPROVED" -> reviewQueue.count { it.status == "APPROVED" }
-                    "REJECTED" -> reviewQueue.count { it.status == "REJECTED" }
-                    else -> reviewQueue.size
-                }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (isSel) PrimaryBlue else SurfaceCard)
-                        .border(1.dp, if (isSel) PrimaryBlue else BorderSubtle, RoundedCornerShape(6.dp))
-                        .clickable { selectedFilter = filter }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = "$filter ($count)",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isSel) TextPrimary else TextSecondary
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        if (isLoading) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                SkeletonCard(height = 160.dp)
-                SkeletonCard(height = 160.dp)
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(bottom = 24.dp)
-            ) {
-                items(filteredList) { item ->
-                    HitlCard(
-                        item = item,
-                        onClick = {
-                            activeReviewItem = item
-                            reviewRationaleNotes = item.reviewerNotes ?: ""
-                        }
-                    )
-                }
-            }
-        }
-    }
-
-    // Interactive Clinical Audit Sign-Off Modal
-    activeReviewItem?.let { item ->
-        AlertDialog(
-            onDismissRequest = { activeReviewItem = null },
-            confirmButton = {
-                if (item.status == "PENDING") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = {
-                                reviewQueue = reviewQueue.map {
-                                    if (it.reviewId == item.reviewId) {
-                                        it.copy(
-                                            status = "REJECTED",
-                                            reviewerNotes = reviewRationaleNotes.ifBlank { "Clinical supervisor rejected disposal action. Proceed with physical vial stability re-test." }
-                                        )
-                                    } else it
-                                }
-                                activeReviewItem = null
-                            },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = StatusCritical),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, StatusCritical)
-                        ) {
-                            Text("Reject Action")
-                        }
-
-                        Button(
-                            onClick = {
-                                reviewQueue = reviewQueue.map {
-                                    if (it.reviewId == item.reviewId) {
-                                        it.copy(
-                                            status = "APPROVED",
-                                            reviewerNotes = reviewRationaleNotes.ifBlank { "Disposal authorized under WHO PQS kinetic degradation guidelines." }
-                                        )
-                                    } else it
-                                }
-                                activeReviewItem = null
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
-                        ) {
-                            Text("Authorize & Sign")
-                        }
-                    }
-                } else {
-                    TextButton(onClick = { activeReviewItem = null }) {
-                        Text("Close", color = PrimaryBlue)
-                    }
-                }
-            },
-            dismissButton = {
-                if (item.status == "PENDING") {
-                    TextButton(onClick = { activeReviewItem = null }) {
-                        Text("Cancel", color = TextSecondary)
-                    }
-                }
-            },
-            containerColor = SurfaceCard,
-            title = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = "Review #${item.reviewId}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = TextPrimary
-                    )
-                    StatusBadge(status = item.status)
+                    Column {
+                        Text(text = "SUBMITTED BY", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                        Text(text = "${item.staffId} (${item.staffTitle})", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(text = "DATE & TIME", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                        Text(text = item.createdAt, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                    }
                 }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "ORIGINAL CLINICIAN INQUIRY:",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted
-                    )
-                    Text(
-                        text = item.query,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextPrimary
-                    )
 
-                    Divider(color = BorderSubtle, thickness = 1.dp)
+                Divider(color = BorderSubtle, thickness = 1.dp)
 
-                    Text(
-                        text = "PROPOSED CLINICAL ACTION:",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted
+                Text(text = "OBSERVED INCIDENT REPORT:", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                Text(text = item.query, style = MaterialTheme.typography.bodyLarge, color = TextPrimary)
+
+                Divider(color = BorderSubtle, thickness = 1.dp)
+
+                Text(text = "PROPOSED CLINICAL ACTION:", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                Text(text = item.proposedAction, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+
+                // Digital Verification Seal
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(SurfaceElevated)
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Verified,
+                        contentDescription = "Verified Authentic",
+                        tint = StatusNominal,
+                        modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = item.proposedAction,
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = "Digital Verification Seal: Verified Authentic & Tamper-Proof",
+                        style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary
                     )
+                }
+            }
+        }
 
-                    // SHA-256 Audit Seal
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(SurfaceElevated)
-                            .padding(8.dp)
-                    ) {
-                        Column {
-                            Text(
-                                text = "CRYPTOGRAPHIC AUDIT DIGEST (SHA-256):",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextMuted,
-                                fontSize = 9.sp
-                            )
-                            Text(
-                                text = item.sha256AuditDigest,
-                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                                color = TextSecondary,
-                                fontSize = 9.sp,
-                                maxLines = 1
-                            )
-                        }
-                    }
+        if (item.status == "PENDING") {
+            OutlinedTextField(
+                value = notesInput,
+                onValueChange = onNotesChange,
+                label = { Text("Supervisor Rationale & Authorizing Remarks") },
+                placeholder = { Text("e.g., Confirmed thermal exposure. Disposal authorized.") },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = PrimaryBlue,
+                    unfocusedBorderColor = BorderSubtle,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary
+                )
+            )
 
-                    if (item.status == "PENDING") {
-                        OutlinedTextField(
-                            value = reviewRationaleNotes,
-                            onValueChange = { reviewRationaleNotes = it },
-                            label = { Text("Clinical Rationale & Modification Notes") },
-                            placeholder = { Text("Enter supervisor verification remarks...") },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = PrimaryBlue,
-                                unfocusedBorderColor = BorderSubtle,
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary
-                            )
-                        )
-                    } else if (!item.reviewerNotes.isNullOrBlank()) {
-                        Text(
-                            text = "SUPERVISOR SIGNED NOTE:",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextMuted
-                        )
-                        Text(
-                            text = item.reviewerNotes,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (item.status == "APPROVED") StatusNominal else StatusCritical
-                        )
+            Spacer(modifier = Modifier.weight(1f))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onReject,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = StatusCritical),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, StatusCritical)
+                ) {
+                    Text("Reject Action")
+                }
+
+                Button(
+                    onClick = onAuthorize,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                ) {
+                    Text("Authorize & Sign")
+                }
+            }
+        } else {
+            if (!item.reviewerNotes.isNullOrBlank()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(SurfaceCard)
+                        .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
+                        .padding(14.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(text = "RECORDED SUPERVISOR DECISION:", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                        Text(text = item.reviewerNotes, style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
                     }
                 }
             }
-        )
+            Spacer(modifier = Modifier.weight(1f))
+        }
     }
 }
 
 @Composable
-fun HitlCard(
+fun CleanHitlCard(
     item: HitlReviewItem,
     onClick: () -> Unit
 ) {
@@ -369,7 +443,6 @@ fun HitlCard(
             .padding(16.dp)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // Card Top Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -422,7 +495,7 @@ fun HitlCard(
                 )
 
                 Text(
-                    text = "Review Audit ->",
+                    text = "Review & Authorize ->",
                     style = MaterialTheme.typography.labelMedium,
                     color = PrimaryBlue
                 )
@@ -453,4 +526,3 @@ private fun StatusBadge(status: String) {
         )
     }
 }
-
