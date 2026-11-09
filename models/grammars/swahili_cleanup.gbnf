@@ -1,0 +1,13 @@
+# GBNF (GGML BNF) Grammar for Deterministic Swahili Text Normalization
+# Eliminates hallucinations by restricting SLM output strictly to punctuated and capitalized variations of valid words.
+
+root ::= sentence+
+
+sentence ::= capitalized_word (space word)* punctuation space?
+
+capitalized_word ::= [A-Z] [a-z]+
+word ::= [a-z]+
+
+punctuation ::= "." | "," | "?" | "!"
+
+space ::= " "
