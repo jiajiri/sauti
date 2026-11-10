@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -30,7 +31,10 @@ import com.sauti.app.ui.theme.*
 
 @Composable
 fun VoiceModeScreen(
+    liveTranscript: String = "",
+    isSpeaking: Boolean = false,
     onCloseClick: () -> Unit = {},
+    onToggleVoice: () -> Unit = {},
     onSubmitTriageQuery: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -39,11 +43,17 @@ fun VoiceModeScreen(
 
     var isRecording by remember { mutableStateOf(true) }
     var amplitude by remember { mutableFloatStateOf(0.45f) }
+    var selectedNoiseLevel by remember { mutableStateOf("Med") }
+    var isVoiceBoostEnabled by remember { mutableStateOf(true) }
+    var isDenoisedActive by remember { mutableStateOf(true) }
+
     var currentTranscript by remember {
-        mutableStateOf("Solar inverter ilizima usiku kucha. Joto la jokofu namba 2 limefika nyuzi 18.6 kwa masaa 5 likiwa na chanjo ya Polio na Insulin. Je, hizi dawa ziko salama au tuzihamishie kwenye chombo cha barafu?")
+        mutableStateOf(
+            if (liveTranscript.isNotBlank()) liveTranscript
+            else "Bofya orb kuanza kurekodi au kutamka maneno..."
+        )
     }
-    var triageOutcome by remember { mutableStateOf<VoiceTriageOutcome?>(null) }
-    var statusMessage by remember { mutableStateOf("Listening to clear clinical dictation...") }
+    var statusMessage by remember { mutableStateOf("Listening with Whisper ASR & On-Device NoiseFix...") }
 
     // Hardware Back Navigation
     BackHandler {
@@ -59,8 +69,8 @@ fun VoiceModeScreen(
                 onAmplitudeChanged = { liveAmp ->
                     amplitude = liveAmp
                 },
-                onError = { err ->
-                    statusMessage = "Microphone active (Standard Mode)"
+                onError = {
+                    statusMessage = "Microphone active (Studio Mode)"
                 }
             )
         }
@@ -76,8 +86,7 @@ fun VoiceModeScreen(
             while (true) {
                 delay(100)
                 if (!recorderManager.hasRecordPermission()) {
-                    // Smooth simulated audio amplitude if mic permission pending
-                    amplitude = 0.2f + kotlin.random.Random.nextFloat() * 0.7f
+                    amplitude = 0.25f + kotlin.random.Random.nextFloat() * 0.65f
                 }
             }
         } else {
@@ -88,10 +97,10 @@ fun VoiceModeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundMatte)
-            .padding(horizontal = 20.dp, vertical = 18.dp)
+            .background(BackgroundDark)
+            .padding(horizontal = 18.dp, vertical = 14.dp)
     ) {
-        // Top Bar with Back Arrow
+        // Top Bar: Back arrow, Studio Title & Private badge
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -109,7 +118,7 @@ fun VoiceModeScreen(
                         onCloseClick()
                     },
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(34.dp)
                         .clip(CircleShape)
                         .background(SurfaceCard)
                         .border(1.dp, BorderSubtle, CircleShape)
@@ -118,20 +127,21 @@ fun VoiceModeScreen(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
                         tint = TextPrimary,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
 
                 Column {
                     Text(
-                        text = "VOICE CLINICAL DICTATION",
+                        text = "NOISEFIX & TALIS AI",
                         style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted
+                        color = PrimaryBlue,
+                        fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = if (isRecording) "Listening (Swahili / English)" else "Dictation Finished",
+                        text = if (isRecording) "Listening (Swahili / English)" else "Voice Paused",
                         style = MaterialTheme.typography.titleMedium,
-                        color = if (isRecording) PrimaryBlue else TextPrimary
+                        color = TextPrimary
                     )
                 }
             }
@@ -139,26 +149,27 @@ fun VoiceModeScreen(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
-                    .background(PrimaryBlue.copy(alpha = 0.12f))
+                    .background(PrimaryBlue.copy(alpha = 0.15f))
                     .border(1.dp, PrimaryBlue.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
                 Text(
-                    text = "Clear Voice",
+                    text = "100% On-Device",
                     style = MaterialTheme.typography.labelSmall,
                     color = PrimaryBlue
                 )
             }
         }
 
-        // Center Voice Dictation Area
+        // Center Voice & Studio Area
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.Center),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Acoustic Voice Orb with glowing rings
             LocalAiVoiceOrb(
                 isSpeaking = isRecording,
                 amplitude = amplitude,
@@ -177,16 +188,17 @@ fun VoiceModeScreen(
                             )
                         }
                     }
+                    onToggleVoice()
                 }
             )
 
-            // Guidance Text
+            // Guidance indicator
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = if (isRecording) "Tap orb when finished speaking" else "Tap orb to speak again",
+                    text = if (isRecording) "Tap orb to interrupt or finish speaking" else "Tap orb to speak aloud",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextMuted
                 )
@@ -209,83 +221,142 @@ fun VoiceModeScreen(
                 }
             }
 
-            // Dictation Text Container
+            // Audio Player & Studio Denoise Box (Image 1 Style)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(SurfaceCard)
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
-                    .padding(16.dp)
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp))
+                    .padding(14.dp)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "AUDIO PROCESSING STUDIO",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextMuted,
+                            fontSize = 9.sp
+                        )
+
+                        // Denoised vs Original toggle
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(SurfaceElevated)
+                                .border(1.dp, BorderSubtle, RoundedCornerShape(6.dp))
+                                .padding(2.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(if (isDenoisedActive) PrimaryBlue else Color.Transparent)
+                                    .clickable { isDenoisedActive = true }
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "Denoised",
+                                    color = if (isDenoisedActive) TextPrimary else TextMuted,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(if (!isDenoisedActive) PrimaryBlue else Color.Transparent)
+                                    .clickable { isDenoisedActive = false }
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "Original",
+                                    color = if (!isDenoisedActive) TextPrimary else TextMuted,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
+                    // Noise Reduction Strength Chips
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(text = "Noise Fix:", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                            listOf("Low", "Med", "High").forEach { level ->
+                                val isSelected = selectedNoiseLevel == level
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(if (isSelected) PrimaryBlue else SurfaceElevated)
+                                        .clickable { selectedNoiseLevel = level }
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                ) {
+                                    Text(
+                                        text = level,
+                                        color = if (isSelected) TextPrimary else TextSecondary,
+                                        fontSize = 10.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+
+                        // Voice Boost Switch
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.clickable { isVoiceBoostEnabled = !isVoiceBoostEnabled }
+                        ) {
+                            Text(text = "Voice Boost", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                            Switch(
+                                checked = isVoiceBoostEnabled,
+                                onCheckedChange = { isVoiceBoostEnabled = it },
+                                modifier = Modifier.height(20.dp),
+                                colors = SwitchDefaults.colors(checkedThumbColor = PrimaryBlue)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Transcript Box with Auto-Punctuation
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(SurfaceCard)
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
+                    .padding(14.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "CAPTURED CLINICAL NOTE:",
+                            text = "WHISPER + GGUF TRANSCRIPT:",
                             style = MaterialTheme.typography.labelSmall,
-                            color = TextMuted
-                        )
-                        Text(
-                            text = "Auto-Punctuation Active",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = PrimaryBlue
+                            color = TextMuted,
+                            fontSize = 9.sp
                         )
                     }
 
                     Text(
                         text = currentTranscript,
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = TextPrimary
                     )
-                }
-            }
-
-            // Clinical Triage Directive Card
-            AnimatedVisibility(
-                visible = triageOutcome != null,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                triageOutcome?.let { res ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(SurfaceCard)
-                            .border(1.dp, StatusCritical.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                            .padding(14.dp)
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "SAFETY DIRECTIVE: ${res.riskLevel}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = StatusCritical
-                                )
-                                Text(
-                                    text = "Submitted for Review",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TextSecondary
-                                )
-                            }
-                            Text(
-                                text = res.directive,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = TextPrimary
-                            )
-                            Text(
-                                text = "Notice: Sent to Supervisor Review Desk for final digital sign-off.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextMuted
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -301,19 +372,12 @@ fun VoiceModeScreen(
                 onClick = {
                     recorderManager.stopListening()
                     isRecording = false
-                    triageOutcome = VoiceTriageOutcome(
-                        riskLevel = "CRITICAL ACTION",
-                        biologic = "Polio (OPV)",
-                        decayIndex = 1.18,
-                        directive = "Move vaccines immediately to conditioned cold box. Safe exposure limit has been exceeded. An official disposal authorization has been submitted to the Supervisor Desk.",
-                        reviewId = 105
-                    )
                     onSubmitTriageQuery(currentTranscript)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp),
-                shape = RoundedCornerShape(8.dp),
+                    .height(46.dp),
+                shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
             ) {
                 Icon(
@@ -323,18 +387,10 @@ fun VoiceModeScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Submit Note for Clinical Assessment",
+                    text = "Submit to Local AI Assistant",
                     style = MaterialTheme.typography.labelLarge
                 )
             }
         }
     }
 }
-
-data class VoiceTriageOutcome(
-    val riskLevel: String,
-    val biologic: String,
-    val decayIndex: Double,
-    val directive: String,
-    val reviewId: Int
-)

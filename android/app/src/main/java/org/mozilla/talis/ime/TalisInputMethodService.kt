@@ -133,16 +133,33 @@ class SautiInputMethodService : InputMethodService() {
         audioRecord = null
     }
 
+    /**
+     * Interface for token-by-token streaming callbacks from the C++ NDK voice engine.
+     */
+    fun interface NativeTokenCallback {
+        fun onToken(token: String)
+    }
+
     private fun processAudioAndCommit() {
         coroutineScope.launch {
+            val tokenBuilder = StringBuilder()
             val recognizedText = try {
-                nativeTranscribeStreaming()
+                nativeConsumeAudioStreaming { token ->
+                    tokenBuilder.append(token)
+                    stateMachine.dispatch(KeyboardIntent.PartialTranscriptionReceived(tokenBuilder.toString()))
+                }
+                val result = tokenBuilder.toString().trim()
+                if (result.isNotEmpty()) result else nativeTranscribeStreaming()
             } catch (e: UnsatisfiedLinkError) {
-                "Habari, Sauti inafanya kazi offline."
+                ""
             }
             withContext(Dispatchers.Main) {
-                stateMachine.dispatch(KeyboardIntent.FinalTextCommitted(recognizedText))
-                currentInputConnection?.commitText(recognizedText, 1)
+                if (recognizedText.isNotBlank()) {
+                    stateMachine.dispatch(KeyboardIntent.FinalTextCommitted(recognizedText))
+                    currentInputConnection?.commitText(recognizedText, 1)
+                } else {
+                    stateMachine.dispatch(KeyboardIntent.FinalTextCommitted(""))
+                }
             }
         }
     }
@@ -150,6 +167,7 @@ class SautiInputMethodService : InputMethodService() {
     // Native JNI stubs
     private external fun nativePushAudioSamples(samples: ShortArray, length: Int): Int
     private external fun nativeTranscribeStreaming(): String
+    private external fun nativeConsumeAudioStreaming(tokenCallback: NativeTokenCallback)
     private external fun nativeNotifyMemoryPressure(isCritical: Boolean)
 
     override fun onDestroy() {

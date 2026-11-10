@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity() {
                 var selectedTab by remember { mutableIntStateOf(0) }
                 var showVoiceMode by remember { mutableStateOf(false) }
                 var isSpeakingState by remember { mutableStateOf(false) }
-                var liveTranscript by remember { mutableStateOf("Habari! Mimi ni Sauti. Nieleze ninawezaje kukusaidia leo?") }
+                var liveTranscript by remember { mutableStateOf("") }
 
                 if (showVoiceMode) {
                     VoiceModeScreen(

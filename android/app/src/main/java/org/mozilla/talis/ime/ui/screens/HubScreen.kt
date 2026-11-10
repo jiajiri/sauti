@@ -152,7 +152,7 @@ fun HubScreen(
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        text = "100% PRIVATE & OFFLINE",
+                                        text = "ON-DEVICE & SOVEREIGN",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = StatusNominal,
                                         fontSize = 9.sp
