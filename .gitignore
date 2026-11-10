@@ -34,3 +34,7 @@ Thumbs.db
 *.iml
 .cxx/
 local.properties
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
