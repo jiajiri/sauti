@@ -2,148 +2,98 @@ package com.sauti.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.animation.*
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AcUnit
-import androidx.compose.material.icons.filled.Forum
-import androidx.compose.material.icons.filled.HealthAndSafety
+import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import com.sauti.app.parser.AgentOutputParser
+import com.sauti.app.tts.TextToSpeechEngine
 import com.sauti.app.ui.screens.ChatScreen
-import com.sauti.app.ui.screens.ColdChainScreen
-import com.sauti.app.ui.screens.HitlScreen
 import com.sauti.app.ui.screens.HubScreen
 import com.sauti.app.ui.screens.VoiceModeScreen
-import com.sauti.app.ui.theme.*
+import com.sauti.app.ui.theme.BackgroundDark
+import com.sauti.app.ui.theme.PrimaryBlue
+import com.sauti.app.ui.theme.SurfaceDark
+import com.sauti.app.ui.theme.SautiThemeLegacy
 
 class MainActivity : ComponentActivity() {
 
+    private lateinit var ttsEngine: TextToSpeechEngine
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        ttsEngine = TextToSpeechEngine(this)
 
         setContent {
             SautiThemeLegacy {
                 var selectedTab by remember { mutableIntStateOf(0) }
                 var showVoiceMode by remember { mutableStateOf(false) }
-                var isGlobalLoading by remember { mutableStateOf(false) }
-
-                // Hardware Back Handler: return to initial tab if on other tabs
-                if (!showVoiceMode && selectedTab != 0) {
-                    BackHandler {
-                        selectedTab = 0
-                    }
-                }
+                var isSpeakingState by remember { mutableStateOf(false) }
+                var liveTranscript by remember { mutableStateOf("Habari! Mimi ni Sauti. Nieleze ninawezaje kukusaidia leo?") }
 
                 if (showVoiceMode) {
                     VoiceModeScreen(
-                        onCloseClick = { showVoiceMode = false },
-                        onSubmitTriageQuery = {
+                        liveTranscript = liveTranscript,
+                        isSpeaking = isSpeakingState,
+                        onCloseClick = {
+                            ttsEngine.stop()
                             showVoiceMode = false
-                            selectedTab = 1 // Smooth switch to Approvals tab
+                        },
+                        onToggleVoice = {
+                            if (isSpeakingState) {
+                                ttsEngine.stop()
+                                isSpeakingState = false
+                            } else {
+                                val cleanText = AgentOutputParser.extractCommitText(liveTranscript)
+                                ttsEngine.speak(
+                                    text = cleanText,
+                                    onStart = { isSpeakingState = true },
+                                    onDone = { isSpeakingState = false }
+                                )
+                            }
                         }
                     )
                 } else {
                     Scaffold(
                         modifier = Modifier.fillMaxSize(),
-                        containerColor = BackgroundMatte,
-                        floatingActionButton = {
-                            FloatingActionButton(
-                                onClick = { showVoiceMode = true },
-                                containerColor = PrimaryBlue,
-                                contentColor = TextPrimary
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Mic,
-                                    contentDescription = "Voice Dictation",
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        },
+                        containerColor = BackgroundDark,
                         bottomBar = {
-                            NavigationBar(
-                                containerColor = SurfaceCard,
-                                tonalElevation = 0.dp
-                            ) {
+                            NavigationBar(containerColor = SurfaceDark) {
                                 NavigationBarItem(
                                     selected = selectedTab == 0,
                                     onClick = { selectedTab = 0 },
-                                    icon = {
-                                        Icon(
-                                            imageVector = Icons.Default.AcUnit,
-                                            contentDescription = "Refrigeration"
-                                        )
-                                    },
-                                    label = { Text("Refrigeration") },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        indicatorColor = PrimaryBlue.copy(alpha = 0.2f),
-                                        selectedIconColor = PrimaryBlue,
-                                        selectedTextColor = PrimaryBlue,
-                                        unselectedIconColor = TextMuted,
-                                        unselectedTextColor = TextMuted
-                                    )
+                                    icon = { Icon(Icons.Default.Memory, contentDescription = "Hub") },
+                                    label = { Text("Hub") },
+                                    colors = NavigationBarItemDefaults.colors(indicatorColor = PrimaryBlue)
                                 )
                                 NavigationBarItem(
                                     selected = selectedTab == 1,
                                     onClick = { selectedTab = 1 },
-                                    icon = {
-                                        Icon(
-                                            imageVector = Icons.Default.VerifiedUser,
-                                            contentDescription = "Approvals"
-                                        )
-                                    },
-                                    label = { Text("Approvals") },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        indicatorColor = PrimaryBlue.copy(alpha = 0.2f),
-                                        selectedIconColor = PrimaryBlue,
-                                        selectedTextColor = PrimaryBlue,
-                                        unselectedIconColor = TextMuted,
-                                        unselectedTextColor = TextMuted
-                                    )
+                                    icon = { Icon(Icons.Default.Chat, contentDescription = "Chat") },
+                                    label = { Text("Chat") },
+                                    colors = NavigationBarItemDefaults.colors(indicatorColor = PrimaryBlue)
                                 )
                                 NavigationBarItem(
-                                    selected = selectedTab == 2,
-                                    onClick = { selectedTab = 2 },
-                                    icon = {
-                                        Icon(
-                                            imageVector = Icons.Default.Forum,
-                                            contentDescription = "Consultation"
+                                    selected = false,
+                                    onClick = {
+                                        showVoiceMode = true
+                                        // Greet user via on-device Swahili TTS
+                                        ttsEngine.speak(
+                                            text = liveTranscript,
+                                            onStart = { isSpeakingState = true },
+                                            onDone = { isSpeakingState = false }
                                         )
                                     },
-                                    label = { Text("Consult") },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        indicatorColor = PrimaryBlue.copy(alpha = 0.2f),
-                                        selectedIconColor = PrimaryBlue,
-                                        selectedTextColor = PrimaryBlue,
-                                        unselectedIconColor = TextMuted,
-                                        unselectedTextColor = TextMuted
-                                    )
-                                )
-                                NavigationBarItem(
-                                    selected = selectedTab == 3,
-                                    onClick = { selectedTab = 3 },
-                                    icon = {
-                                        Icon(
-                                            imageVector = Icons.Default.HealthAndSafety,
-                                            contentDescription = "Clinic Hub"
-                                        )
-                                    },
-                                    label = { Text("Clinic Hub") },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        indicatorColor = PrimaryBlue.copy(alpha = 0.2f),
-                                        selectedIconColor = PrimaryBlue,
-                                        selectedTextColor = PrimaryBlue,
-                                        unselectedIconColor = TextMuted,
-                                        unselectedTextColor = TextMuted
-                                    )
+                                    icon = { Icon(Icons.Default.Mic, contentDescription = "Voice Mode") },
+                                    label = { Text("Voice") },
+                                    colors = NavigationBarItemDefaults.colors(indicatorColor = PrimaryBlue)
                                 )
                             }
                         }
@@ -152,42 +102,25 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(innerPadding),
-                            color = BackgroundMatte
+                            color = BackgroundDark
                         ) {
-                            AnimatedContent(
-                                targetState = selectedTab,
-                                transitionSpec = {
-                                    fadeIn() togetherWith fadeOut()
-                                },
-                                label = "TabNavigationTransition"
-                            ) { tabIndex ->
-                                when (tabIndex) {
-                                    0 -> ColdChainScreen(
-                                        isLoading = isGlobalLoading,
-                                        onNavigateToHitl = { selectedTab = 1 },
-                                        onLogExcursionAlert = { _, _, _ ->
-                                            selectedTab = 1
-                                        }
-                                    )
-                                    1 -> HitlScreen(
-                                        isLoading = isGlobalLoading
-                                    )
-                                    2 -> ChatScreen(
-                                        isLoading = isGlobalLoading,
-                                        onVoiceClick = { showVoiceMode = true }
-                                    )
-                                    3 -> HubScreen(
-                                        isLoading = isGlobalLoading,
-                                        onToggleSkeleton = {
-                                            isGlobalLoading = !isGlobalLoading
-                                        }
-                                    )
-                                }
+                            when (selectedTab) {
+                                0 -> HubScreen()
+                                1 -> ChatScreen(
+                                    onVoiceClick = {
+                                        showVoiceMode = true
+                                    }
+                                )
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        ttsEngine.shutdown()
     }
 }
