@@ -25,9 +25,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.util.UUID
 import com.sauti.app.audio.AudioRecorderManager
+import com.sauti.app.audio.AudioRoutingManager
+import com.sauti.app.data.local.ChatSessionEntity
+import com.sauti.app.data.local.SautiDatabase
 import com.sauti.app.ui.components.LocalAiVoiceOrb
 import com.sauti.app.ui.theme.*
+
+/**
+ * Extracts first 3 words from recognized speech text for session titles.
+ */
+fun extractFirstThreeWords(text: String): String {
+    val clean = text.trim()
+    if (clean.isBlank()) return "New Voice Session"
+    val words = clean.split("\\s+".toRegex()).filter { it.isNotBlank() }
+    return if (words.isEmpty()) "New Voice Session" else words.take(3).joinToString(" ")
+}
 
 @Composable
 fun VoiceModeScreen(
@@ -40,6 +55,9 @@ fun VoiceModeScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val recorderManager = remember { AudioRecorderManager(context) }
+    val audioRoutingManager = remember { AudioRoutingManager(context) }
+    val currentRouteState by audioRoutingManager.currentRoute.collectAsState()
+    val sautiDb = remember { SautiDatabase.getInstance(context) }
 
     var isRecording by remember { mutableStateOf(true) }
     var amplitude by remember { mutableFloatStateOf(0.45f) }
@@ -53,7 +71,15 @@ fun VoiceModeScreen(
             else "Bofya orb kuanza kurekodi au kutamka maneno..."
         )
     }
-    var statusMessage by remember { mutableStateOf("Listening with Whisper ASR & On-Device NoiseFix...") }
+
+    // Hardware routing dynamic status
+    val hardwareRoutingText = remember(currentRouteState) {
+        if (currentRouteState.isExternal) {
+            "Listening via Headset Mic 🎧"
+        } else {
+            "Listening via Device Mic 🎙️"
+        }
+    }
 
     // Hardware Back Navigation
     BackHandler {
@@ -70,7 +96,7 @@ fun VoiceModeScreen(
                     amplitude = liveAmp
                 },
                 onError = {
-                    statusMessage = "Microphone active (Studio Mode)"
+                    // Handled internally
                 }
             )
         }
@@ -91,6 +117,21 @@ fun VoiceModeScreen(
             }
         } else {
             amplitude = 0.0f
+        }
+    }
+
+    fun persistSessionAndClose(textToSave: String) {
+        val snippet = extractFirstThreeWords(textToSave)
+        val newSessionId = UUID.randomUUID().toString()
+        scope.launch {
+            sautiDb.chatSessionDao().insert(
+                ChatSessionEntity(
+                    id = newSessionId,
+                    title = snippet,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+            onSubmitTriageQuery(textToSave)
         }
     }
 
@@ -133,15 +174,15 @@ fun VoiceModeScreen(
 
                 Column {
                     Text(
-                        text = "NOISEFIX & TALIS AI",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = PrimaryBlue,
+                        text = "Sauti Audio Mode",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TextPrimary,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = if (isRecording) "Listening (Swahili / English)" else "Voice Paused",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = TextPrimary
+                        text = if (isRecording) "Sauti Voice Active" else "Sauti Voice Paused",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = PrimaryBlue
                     )
                 }
             }
@@ -177,10 +218,10 @@ fun VoiceModeScreen(
                     if (isRecording) {
                         recorderManager.stopListening()
                         isRecording = false
-                        statusMessage = "Dictation paused. Tap to resume."
+                        // Automatically persist session when user stops recording
+                        persistSessionAndClose(currentTranscript)
                     } else {
                         isRecording = true
-                        statusMessage = "Listening to clear clinical dictation..."
                         if (recorderManager.hasRecordPermission()) {
                             recorderManager.startListening(
                                 scope = scope,
@@ -192,7 +233,7 @@ fun VoiceModeScreen(
                 }
             )
 
-            // Guidance indicator
+            // Guidance indicator & Hardware Route
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -214,14 +255,14 @@ fun VoiceModeScreen(
                             .background(if (isRecording) StatusNominal else TextMuted)
                     )
                     Text(
-                        text = statusMessage,
+                        text = if (isRecording) hardwareRoutingText else "Audio Route Standby",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary
                     )
                 }
             }
 
-            // Audio Player & Studio Denoise Box (Image 1 Style)
+            // Audio Player & Processing Box
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -237,7 +278,7 @@ fun VoiceModeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "AUDIO PROCESSING STUDIO",
+                            text = "AUDIO PROCESSING ENGINE",
                             style = MaterialTheme.typography.labelSmall,
                             color = TextMuted,
                             fontSize = 9.sp
@@ -330,7 +371,7 @@ fun VoiceModeScreen(
                 }
             }
 
-            // Transcript Box with Auto-Punctuation
+            // Transcript Box with Sauti Native Transcription
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -345,7 +386,7 @@ fun VoiceModeScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "WHISPER + GGUF TRANSCRIPT:",
+                            text = "SAUTI NATIVE TRANSCRIPTION:",
                             style = MaterialTheme.typography.labelSmall,
                             color = TextMuted,
                             fontSize = 9.sp
@@ -372,7 +413,7 @@ fun VoiceModeScreen(
                 onClick = {
                     recorderManager.stopListening()
                     isRecording = false
-                    onSubmitTriageQuery(currentTranscript)
+                    persistSessionAndClose(currentTranscript)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -387,7 +428,7 @@ fun VoiceModeScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Submit to Local AI Assistant",
+                    text = "Submit to Sauti Core",
                     style = MaterialTheme.typography.labelLarge
                 )
             }

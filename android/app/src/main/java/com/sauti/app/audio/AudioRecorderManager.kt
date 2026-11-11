@@ -15,10 +15,19 @@ class AudioRecorderManager(private val context: Context) {
     private var recordingJob: Job? = null
     private var audioRecord: AudioRecord? = null
 
+    // Routing and VAD controllers
+    val routingManager = AudioRoutingManager(context)
+    val vadController = DynamicVadController()
+
     companion object {
         const val SAMPLE_RATE = 16000
         const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
+    }
+
+    init {
+        // Wire route changes to VAD threshold adapter
+        vadController.onAudioRouteChanged(routingManager.currentRoute.value)
     }
 
     fun hasRecordPermission(): Boolean {
@@ -31,6 +40,7 @@ class AudioRecorderManager(private val context: Context) {
     fun startListening(
         scope: CoroutineScope,
         onAmplitudeChanged: (Float) -> Unit,
+        onSpeechDetected: (Boolean) -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
         if (isRecording.get()) return
@@ -39,6 +49,9 @@ class AudioRecorderManager(private val context: Context) {
             onError("Microphone permission required")
             return
         }
+
+        // Notify VAD about current hardware route
+        vadController.onAudioRouteChanged(routingManager.currentRoute.value)
 
         val minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
         val bufferSize = if (minBufferSize > 0) minBufferSize * 2 else 4096
@@ -57,6 +70,11 @@ class AudioRecorderManager(private val context: Context) {
                 return
             }
 
+            // Bind explicitly to preferred hardware input device (e.g. TYPE_WIRED_HEADSET or TYPE_USB_HEADSET)
+            routingManager.preferredInputDevice.value?.let { preferredDevice ->
+                audioRecord?.setPreferredDevice(preferredDevice)
+            }
+
             audioRecord?.startRecording()
             isRecording.set(true)
 
@@ -66,8 +84,11 @@ class AudioRecorderManager(private val context: Context) {
                     val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
                     if (read > 0) {
                         val amplitude = AudioVisualizerProcessor.computeNormalizedRms(buffer, read)
+                        val isSpeech = vadController.processFrame(amplitude)
+
                         withContext(Dispatchers.Main) {
                             onAmplitudeChanged(amplitude)
+                            onSpeechDetected(isSpeech)
                         }
                     }
                     delay(30)
@@ -94,5 +115,11 @@ class AudioRecorderManager(private val context: Context) {
         } finally {
             audioRecord = null
         }
+        vadController.reset()
+    }
+
+    fun teardown() {
+        stopListening()
+        routingManager.teardown()
     }
 }

@@ -1,38 +1,45 @@
-# Sauti: Sovereign Offline Swahili & Code-Switching AI Platform for Android
+# Sauti: Sovereign Offline African Language AI Platform for Android
 
 [![Platform](https://img.shields.io/badge/Platform-Android_14_|_API_24+-brightgreen.svg)](#system-architecture)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Privacy](https://img.shields.io/badge/Privacy-Zero_Internet_Permission-success.svg)](#data-sovereignty-and-security)
-[![Architecture](https://img.shields.io/badge/Engine-whisper.cpp_+_llama.cpp-orange.svg)](#edge-inference-engine)
+[![Engine](https://img.shields.io/badge/Engine-whisper.cpp_+_llama.cpp-orange.svg)](#edge-inference-engine)
 [![UI](https://img.shields.io/badge/UI-Jetpack_Compose_|_Material_3-blueviolet.svg)](#user-interface-and-experience)
 
-Sauti is a sovereign, 100% offline edge AI engine and voice keyboard engineered for entry-level Android devices (2GB–4GB physical RAM) across East Africa.
+**Sauti** is a sovereign, 100% offline edge AI agent and speech platform engineered for entry-level Android devices across Africa. It brings frontier model capabilities—including intelligent coding assistance, mathematical reasoning, Swahili & Sheng normalization, and speech recognition—directly onto mobile hardware without internet connection, API keys, or cloud servers.
 
-The platform provides on-device speech recognition and generative assistance for **Swahili**, **Sheng**, and **Swahili-English code-switching**, operating without cloud connectivity and omitting `android.permission.INTERNET`.
-
-Developed for the **Mozilla Human-Scale AI Incubator** to address digital inclusion and data sovereignty in bandwidth-constrained regions.
+Developed to guarantee data sovereignty, privacy, and digital inclusion across bandwidth-constrained regions.
 
 ---
 
-## The Problem Sauti Solves
+## What Sauti Solves
 
-Over 200 million people speak Swahili across Eastern and Central Africa, frequently blending Swahili and English into colloquial dialects such as *Sheng*. Existing commercial speech-to-text (ASR) engines face significant limitations in these contexts:
+Over 200 million people speak Swahili and regional African dialects (blending Swahili, Sheng, and English). Until now, technical users, developers, educators, and field professionals in Africa have faced severe barriers when accessing frontier AI tools:
 
-1. **Cloud Dependency**: Conventional mobile speech keyboards require continuous high-speed internet. When cellular connectivity drops or mobile data balances expire, speech input stops functioning entirely.
-2. **Dialect Mismatch**: Standard cloud models trained on formal grammar struggle with regional code-switching (e.g., *"Niko hapa town na nataka ku-check ile issue"*).
-3. **Privacy and Surveillance Risks**: Dictated messages, passwords, client disputes, and personal communications are transmitted to centralized commercial servers outside African jurisdiction.
-4. **Hardware Barriers**: Modern generative AI interfaces demand 8GB–16GB RAM devices, excluding users on prevalent entry-level hardware (Transsion Tecno, Infinix, and Samsung A-series).
+1. **Total Cloud Dependency**: Cloud-gated assistants stop functioning when mobile data runs out, connectivity drops in rural zones, or latency spikes.
+2. **Heavy Hardware Demands**: Modern multi-billion parameter models require high-end flagship phones (8GB–16GB RAM) or cloud subscriptions, leaving users on standard 2GB–4GB physical RAM devices behind.
+3. **Dialect & Context Erasure**: Standard models struggle with everyday African code-switching (*"Niko na code hapa lakini inakataa ku-run"*).
+4. **Data Privacy & Surveillance**: Critical medical records, proprietary codebases, passwords, and sensitive conversations are uploaded to third-party servers outside African jurisdiction.
 
-**Sauti solves this by embedding an INT8 quantized Whisper ASR core and a constrained small language model directly on-device**, bounded within a strict 250MB memory ceiling and operating in permanent offline mode.
+**Sauti solves this by running quantized on-device SLMs (Small Language Models) and Whisper ASR models locally**, bounded strictly under a 250MB memory footprint with zero cloud egress (`android.permission.INTERNET` is not included in the manifest).
 
 ---
 
-## Core System Architecture
+## Core Capabilities
+
+- **Offline Coding Assistant**: Generates, debugs, and explains code in Kotlin, C/C++, Bash, and SQL on-device.
+- **Mathematical & Algorithmic Reasoning**: Provides step-by-step mathematical problem solving, unit conversions, and logical proofs completely offline.
+- **African Language & Code-Switching Speech**: Real-time acoustic recognition and normalization for Swahili, Sheng, and English code-switching.
+- **Sovereign System Keyboard & Chat**: Works as an on-screen voice keyboard across all Android apps, or as an autonomous conversational studio.
+
+---
+
+## System Architecture
 
 ```
 +-------------------------------------------------------------------+
 |               Android Jetpack Compose UI / IME Layer              |
-|        (Zero allocations on typing & rendering paths: 120 FPS)    |
+|        (Edge-to-Edge System Bar, Minimal Scaffolding: 120 FPS)    |
 +---------------------------------+---------------------------------+
                                   | Lock-Free SPSC Circular Ring
                                   v
@@ -52,7 +59,7 @@ Over 200 million people speak Swahili across Eastern and Central Africa, frequen
 |              GBNF Grammar Post-Processing (llama.cpp)             |
 |       Deterministic Casing, Punctuation & Disfluency Removal      |
 +---------------------------------+---------------------------------+
-                                  | Verified Text
+                                  | Verified Text / Reasoning
                                   v
 +-------------------------------------------------------------------+
 |                    InputConnection.commitText()                   |
@@ -73,7 +80,7 @@ The application manifest intentionally omits internet access:
     <!-- Zero network permission: guaranteed local privacy -->
 </manifest>
 ```
-All audio processing, feature extraction, and text generation execute locally inside native C++ memory buffers.
+All audio processing, feature extraction, code generation, and mathematical reasoning execute locally inside native C++ memory buffers.
 
 ### 2. Low-Level DSA: O(1) Lock-Free SPSC Audio Buffer
 To eliminate audio frame dropping and prevent Android UI thread stutter, audio samples flow through an $O(1)$ Single-Producer Single-Consumer (SPSC) circular queue (`ring_buffer.h`):
@@ -99,9 +106,9 @@ Designed with a minimal obsidian aesthetic inspired by high-performance mobile A
 
 | Screen | Core Purpose | Interface Mechanics |
 | :--- | :--- | :--- |
-| **Hands-Free Voice Mode** | Voice dictation & continuous conversation | Centered acoustic orb with 5 vertical equalizer bars, dynamic audio decibel scaling, and tap-to-interrupt speech control. |
-| **Offline Chat** | Private on-device document & query processing | Obsidian dark background (`#090A0D`), asymmetric cards, inline generation speed indicators (`t/s`), and precision bottom toolbar. |
-| **Model Hub** | On-device engine management & system telemetry | Real-time RAM telemetry (`24.0 GB / 17.8 GB usable`), ARM64E SIMD indicators, and on-disk GGUF model cards. |
+| **Sauti Chat** | Private on-device coding, math & reasoning | Edge-to-edge dark background, zero bottom-overlap Scaffolding, dynamic token speed (`t/s`), and interactive history navigation. |
+| **Audio Chat** | Voice dictation & continuous conversation | Centered acoustic orb with 5 vertical equalizer bars, dynamic audio decibel scaling, and tap-to-interrupt speech control. |
+| **Workspace Drawer** | Session history & multi-workspace switcher | Quick navigation between New Chat, Audio Chat, Library, and Notebooks, plus historical sessions and user profile. |
 | **Voice Keyboard (IME)** | System-wide text input across all Android apps | System `InputMethodService` overlay featuring a live Whisper transcription strip, centered voice trigger, and fast punctuation keys. |
 
 ---
@@ -122,23 +129,18 @@ Designed with a minimal obsidian aesthetic inspired by high-performance mobile A
 │           │   ├── ring_buffer.h              # Lock-free SPSC C++ circular queue (DSA)
 │           │   └── voice_engine_jni.cpp       # JNI bridge for audio capture & inference
 │           ├── java/com/sauti/app/
-│           │   ├── MainActivity.kt            # Standalone Hub, Chat, and Voice UI
+│           │   ├── MainActivity.kt            # Edge-to-edge Chat, Audio, and Workspace UI
 │           │   ├── SautiInputMethodService.kt # Android InputMethodService (IME)
 │           │   ├── audio/
-│           │   │   └── AudioVisualizerProcessor.kt # RMS decibel calculator
+│           │   │   ├── AudioRecorderManager.kt # Dynamic hardware device input binder
+│           │   │   └── AudioRoutingManager.kt  # System headset / USB-C route detector
 │           │   └── ui/
-│           │       ├── components/
-│           │       │   ├── HardwareTelemetryCard.kt # System memory status
-│           │       │   └── LocalAiVoiceOrb.kt       # 5-bar acoustic voice orb
-│           │       ├── keyboard/
-│           │       │   └── ComposeKeyboardLayout.kt # Keyboard layout
 │           │       ├── screens/
-│           │       │   ├── ChatScreen.kt            # Offline chat screen
-│           │       │   ├── HubScreen.kt             # Local model management
-│           │       │   └── VoiceModeScreen.kt       # Centered hands-free voice mode
+│           │       │   ├── ChatScreen.kt      # Sauti offline speech & coding chat
+│           │       │   └── VoiceModeScreen.kt # Hands-free acoustic voice mode
 │           │       └── theme/
-│           │           ├── Color.kt                 # Obsidian palette tokens
-│           │           └── Theme.kt                 # Material 3 dark color scheme
+│           │           ├── Color.kt           # Obsidian palette tokens
+│           │           └── Theme.kt           # Material 3 dark color scheme
 │           └── res/
 │               ├── values/strings.xml         # Localization strings
 │               └── xml/method.xml             # InputMethod subtype definitions

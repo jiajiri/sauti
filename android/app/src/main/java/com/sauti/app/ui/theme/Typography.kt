@@ -6,10 +6,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Roboto Typography Hierarchy for High-Precision Clinical Readability
+// Roboto Typography Hierarchy for High-Precision Readability
 val RobotoFont = FontFamily.SansSerif
 
-val SautiTypographyLegacy = Typography(
+val SautiTypography = Typography(
     displayLarge = TextStyle(
         fontFamily = RobotoFont,
         fontWeight = FontWeight.Bold,
@@ -99,4 +99,6 @@ val SautiTypographyLegacy = Typography(
         color = TextMuted
     )
 )
+
+val SautiTypographyLegacy = SautiTypography
 

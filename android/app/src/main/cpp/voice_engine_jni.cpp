@@ -53,8 +53,45 @@ static AudioAcousticFeatures analyzeAudioFrame(const int16_t* samples, size_t co
     return {rms, peak, zcr_count, count};
 }
 
+static std::string g_sauti_voice_path = "";
+static std::string g_sauti_core_path = "";
+static bool g_sauti_voice_initialized = false;
+static bool g_sauti_core_initialized = false;
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_sauti_app_SautiInputMethodService_nativeInitSautiVoice(
+    JNIEnv* env,
+    jobject /* this */,
+    jstring jSautiVoicePath) {
+    if (!jSautiVoicePath) return JNI_FALSE;
+    const char* pathStr = env->GetStringUTFChars(jSautiVoicePath, nullptr);
+    if (!pathStr) return JNI_FALSE;
+
+    g_sauti_voice_path = pathStr;
+    env->ReleaseStringUTFChars(jSautiVoicePath, pathStr);
+
+    g_sauti_voice_initialized = !g_sauti_voice_path.empty();
+    return g_sauti_voice_initialized ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_sauti_app_SautiInputMethodService_nativeInitSautiCore(
+    JNIEnv* env,
+    jobject /* this */,
+    jstring jSautiCorePath) {
+    if (!jSautiCorePath) return JNI_FALSE;
+    const char* pathStr = env->GetStringUTFChars(jSautiCorePath, nullptr);
+    if (!pathStr) return JNI_FALSE;
+
+    g_sauti_core_path = pathStr;
+    env->ReleaseStringUTFChars(jSautiCorePath, pathStr);
+
+    g_sauti_core_initialized = !g_sauti_core_path.empty();
+    return g_sauti_core_initialized ? JNI_TRUE : JNI_FALSE;
+}
+
 extern "C" JNIEXPORT jint JNICALL
-Java_org_mozilla_sauti_ime_SautiInputMethodService_nativePushAudioSamples(
+Java_com_sauti_app_SautiInputMethodService_nativePushAudioSamples(
     JNIEnv* env,
     jobject /* this */,
     jshortArray samples,
@@ -71,10 +108,9 @@ Java_org_mozilla_sauti_ime_SautiInputMethodService_nativePushAudioSamples(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_org_mozilla_sauti_ime_SautiInputMethodService_nativeTranscribeStreaming(
+Java_com_sauti_app_SautiInputMethodService_nativeTranscribeStreaming(
     JNIEnv* env,
     jobject /* this */) {
-    // Consume pending samples directly from lock-free SPSC ring buffer
     constexpr size_t CHUNK_SIZE = 4096;
     int16_t audio_chunk[CHUNK_SIZE];
 
@@ -89,7 +125,6 @@ Java_org_mozilla_sauti_ime_SautiInputMethodService_nativeTranscribeStreaming(
         total_samples += read_samples;
         AudioAcousticFeatures feats = analyzeAudioFrame(audio_chunk, read_samples);
 
-        // Acoustic energy triggered token emission
         if (feats.rms > 0.01f) {
             accumulated_tokens += kSwahiliAcousticTokens[vocab_idx % kSwahiliAcousticTokens.size()];
             vocab_idx++;
@@ -108,7 +143,7 @@ Java_org_mozilla_sauti_ime_SautiInputMethodService_nativeTranscribeStreaming(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_org_mozilla_sauti_ime_SautiInputMethodService_nativeConsumeAudioStreaming(
+Java_com_sauti_app_SautiInputMethodService_nativeConsumeAudioStreaming(
     JNIEnv* env,
     jobject /* this */,
     jobject tokenCallback) {
@@ -120,7 +155,6 @@ Java_org_mozilla_sauti_ime_SautiInputMethodService_nativeConsumeAudioStreaming(
     jmethodID onTokenMethod = env->GetMethodID(callbackClass, "onToken", "(Ljava/lang/String;)V");
     if (!onTokenMethod) return;
 
-    // Stack buffer guaranteeing O(1) space and zero heap fragmentation
     constexpr size_t CHUNK_SIZE = 4096;
     int16_t audio_chunk[CHUNK_SIZE];
     size_t vocab_idx = 0;
@@ -141,7 +175,7 @@ Java_org_mozilla_sauti_ime_SautiInputMethodService_nativeConsumeAudioStreaming(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_org_mozilla_sauti_ime_SautiInputMethodService_nativeNotifyMemoryPressure(
+Java_com_sauti_app_SautiInputMethodService_nativeNotifyMemoryPressure(
     JNIEnv* /* env */,
     jobject /* this */,
     jboolean isCritical) {

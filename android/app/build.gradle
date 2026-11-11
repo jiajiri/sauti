@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace 'org.mozilla.talis.ime'
+    namespace 'com.sauti.app'
     compileSdk 34
 
     defaultConfig {
-        applicationId "org.mozilla.talis.ime"
+        applicationId "com.sauti.app"
         minSdk 24
         targetSdk 34
         versionCode 1

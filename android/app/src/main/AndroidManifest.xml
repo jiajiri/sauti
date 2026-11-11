@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="org.mozilla.talis.ime">
+    package="com.sauti.app">
 
     <!-- INSTITUTIONAL PERMISSION SKELETON: Sovereign Offline Clinic & Cold-Chain Edge Node -->
     <!-- Zero Public Internet Egress: android.permission.INTERNET is omitted by design -->
@@ -43,9 +43,9 @@
             </intent-filter>
         </activity>
 
-        <!-- Sovereign Voice Keyboard IME Service for Hospital Field Tablets -->
+        <!-- Sauti Sovereign Voice Keyboard Service -->
         <service
-            android:name=".TalisInputMethodService"
+            android:name=".SautiInputMethodService"
             android:label="@string/ime_name"
             android:permission="android.permission.BIND_INPUT_METHOD"
             android:exported="true">

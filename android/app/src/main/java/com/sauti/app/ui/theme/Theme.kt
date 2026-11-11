@@ -24,10 +24,13 @@ private val SovereignDarkColorScheme = darkColorScheme(
 )
 
 @Composable
-fun SautiThemeLegacy(content: @Composable () -> Unit) {
+fun SautiTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = SovereignDarkColorScheme,
-        typography = SautiTypographyLegacy,
+        typography = SautiTypography,
         content = content
     )
 }
+
+@Composable
+fun SautiThemeLegacy(content: @Composable () -> Unit) = SautiTheme(content)
