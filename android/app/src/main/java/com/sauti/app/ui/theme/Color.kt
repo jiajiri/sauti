@@ -31,3 +31,6 @@ val TextDisabled = Color(0xFF334155)
 // Shimmer Skeleton Colors
 val ShimmerBase = Color(0xFF141924)
 val ShimmerHighlight = Color(0xFF202738)
+
+val AccentEmerald = Color(0xFF10B981)
+val AccentEmeraldGlow = Color(0x3310B981)

@@ -17,6 +17,20 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Ensures authentic Bantu phonology, correct penultimate syllable stress,
  * and eliminates non-African / robotic Mandarin foreign accents.
  */
+/**
+ * 3 Highly Realistic African / Swahili Voice Characters.
+ */
+enum class VoicePersona(
+    val personaName: String,
+    val pitch: Float,
+    val speechRate: Float,
+    val description: String
+) {
+    AME("Ame", 1.02f, 0.94f, "Warm, natural conversational East African voice"),
+    LIORA("Liora", 0.88f, 0.88f, "Deep, articulate, resonant broadcast and educational voice"),
+    AYANA("Ayana", 1.15f, 0.98f, "Clear, modern, energetic youthful African voice")
+}
+
 class TextToSpeechEngine(
     private val context: Context,
     private val onInitComplete: (success: Boolean) -> Unit = {}
@@ -26,6 +40,15 @@ class TextToSpeechEngine(
     private var mediaPlayer: MediaPlayer? = null
     private val isReady = AtomicBoolean(false)
     private var hasNativeSwahiliVoice = false
+    private var activePersona: VoicePersona = VoicePersona.AME
+
+    fun setVoicePersona(persona: VoicePersona) {
+        activePersona = persona
+        tts?.setPitch(persona.pitch)
+        tts?.setSpeechRate(persona.speechRate)
+    }
+
+    fun getActivePersona(): VoicePersona = activePersona
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {

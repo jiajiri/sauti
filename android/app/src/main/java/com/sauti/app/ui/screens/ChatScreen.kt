@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.delay
@@ -63,7 +64,7 @@ data class ChatSession(
     val id: String,
     val title: String,
     val timestamp: Long = System.currentTimeMillis(),
-    val messages: MutableList<ConversationalMessage> = mutableListOf()
+    val messages: androidx.compose.runtime.snapshots.SnapshotStateList<ConversationalMessage> = androidx.compose.runtime.mutableStateListOf()
 )
 
 /**
@@ -127,251 +128,9 @@ fun parseMarkdownContent(raw: String): List<ContentBlock> {
  * Offline Intelligent Agent Response Synthesizer (Sauti Engine).
  * Covers Coding, General Reasoning, Problem Solving, and Conversational Q&A.
  */
-fun generateStreamingTokens(prompt: String): Flow<String> = flow {
-    val clean = prompt.trim()
-    val lower = clean.lowercase(Locale.ROOT)
-
-    val chunks: List<String> = when {
-        // --- 1. PYTHON CODING ---
-        lower.contains("python") -> {
-            listOf(
-                "Hapa kuna mfano wa kanuni ya Python safi, yenye muundo thabiti na ufafanuzi kamili:\n\n",
-                "```PYTHON\n",
-                "# Sauti Offline Code Engine - Python Implementation\n",
-                "from typing import List, Dict, Any\nimport time\n\n",
-                "class TaskProcessor:\n",
-                "    \"\"\"Darasa la kuchakata kazi kwa ufanisi wa hali ya juu.\"\"\"\n",
-                "    def __init__(self, name: str) -> None:\n",
-                "        self.name = name\n",
-                "        self.history: List[Dict[str, Any]] = []\n\n",
-                "    def process_items(self, items: List[Any]) -> Dict[str, Any]:\n",
-                "        \"\"\"Inachuja na kuongeza thamani kwenye orodha ya data.\"\"\"\n",
-                "        start_time = time.time()\n",
-                "        results = [item for item in items if item is not None]\n",
-                "        elapsed = round(time.time() - start_time, 4)\n",
-                "        record = {'count': len(results), 'duration': elapsed, 'items': results}\n",
-                "        self.history.append(record)\n",
-                "        return record\n\n",
-                "# Mfano wa matumizi:\n",
-                "if __name__ == '__main__':\n",
-                "    processor = TaskProcessor('SautiWorker')\n",
-                "    output = processor.process_items([10, 20, None, 40, 50])\n",
-                "    print(f'Matokeo: {output}')\n",
-                "```\n\n",
-                "### Ufafanuzi wa Kanuni:\n",
-                "- **Typing Hints**: Kanuni inatumia `typing` ili kuzuia makosa ya data wakati wa kuendesha msimbo.\n",
-                "- **List Comprehension**: Inachakata data kwa kasi ya O(N) kwenye kumbukumbu ya ndani (RAM).\n",
-                "- Unaweza kunakili msimbo huu kwa kubonyeza kitufe cha **Copy** hapo juu."
-            )
-        }
-
-        // --- 2. KOTLIN / ANDROID CODING ---
-        lower.contains("kotlin") || lower.contains("android") || lower.contains("compose") || lower.contains("coroutine") -> {
-            listOf(
-                "Hapa kuna muundo thabiti wa Kotlin unaotumia **Coroutines** na **StateFlow** kwa ajili ya programu za Android:\n\n",
-                "```KOTLIN\n",
-                "package com.sauti.example\n\n",
-                "import kotlinx.coroutines.flow.MutableStateFlow\n",
-                "import kotlinx.coroutines.flow.StateFlow\n",
-                "import kotlinx.coroutines.flow.asStateFlow\n",
-                "import kotlinx.coroutines.CoroutineScope\n",
-                "import kotlinx.coroutines.Dispatchers\n",
-                "import kotlinx.coroutines.launch\n\n",
-                "sealed class UiState {\n",
-                "    object Idle : UiState()\n",
-                "    object Loading : UiState()\n",
-                "    data class Success(val data: List<String>) : UiState()\n",
-                "    data class Error(val message: String) : UiState()\n",
-                "}\n\n",
-                "class SautiRepository(private val scope: CoroutineScope) {\n",
-                "    private val _state = MutableStateFlow<UiState>(UiState.Idle)\n",
-                "    val state: StateFlow<UiState> = _state.asStateFlow()\n\n",
-                "    fun loadOfflineData() {\n",
-                "        _state.value = UiState.Loading\n",
-                "        scope.launch(Dispatchers.IO) {\n",
-                "            try {\n",
-                "                val localItems = listOf(\"Mipangilio\", \"Kazi za Ndani\", \"Historia\")\n",
-                "                _state.value = UiState.Success(localItems)\n",
-                "            } catch (e: Exception) {\n",
-                "                _state.value = UiState.Error(e.localizedMessage ?: \"Hitilafu\")\n",
-                "            }\n",
-                "        }\n",
-                "    }\n",
-                "}\n",
-                "```\n\n",
-                "### Mambo Muhimu:\n",
-                "- **StateFlow**: Hutoa mtiririko salama wa data unaozingatia mzunguko wa maisha wa mfumo wa Android.\n",
-                "- **Dispatchers.IO**: Inatekeleza kazi za kusoma na kuhifadhi bila kukwamisha kiolesura kikuu cha mtumiaji (UI)."
-            )
-        }
-
-        // --- 3. JAVASCRIPT / TYPESCRIPT / WEB ---
-        lower.contains("javascript") || lower.contains("js") || lower.contains("typescript") || lower.contains("react") || lower.contains("node") -> {
-            listOf(
-                "Hapa kuna utekelezaji wa kisasa wa JavaScript (ES6+) kwa kutumia **Async/Await** na utunzaji salama wa data:\n\n",
-                "```JAVASCRIPT\n",
-                "// Sauti Offline JavaScript Assistant\n",
-                "class DataService {\n",
-                "    constructor(storageKey = 'sauti_offline_store') {\n",
-                "        this.storageKey = storageKey;\n",
-                "    }\n\n",
-                "    async fetchOfflineRecords() {\n",
-                "        try {\n",
-                "            const raw = localStorage.getItem(this.storageKey);\n",
-                "            return raw ? JSON.parse(raw) : [];\n",
-                "        } catch (error) {\n",
-                "            console.error('Hitilafu ya kusoma kumbukumbu:', error);\n",
-                "            return [];\n",
-                "        }\n",
-                "    }\n\n",
-                "    async saveRecord(payload) {\n",
-                "        const current = await this.fetchOfflineRecords();\n",
-                "        const updated = [...current, { ...payload, createdAt: new Date().toISOString() }];\n",
-                "        localStorage.setItem(this.storageKey, JSON.stringify(updated));\n",
-                "        return { success: true, total: updated.length };\n",
-                "    }\n",
-                "}\n\n",
-                "// Mfano wa matumizi:\n",
-                "const service = new DataService();\n",
-                "service.saveRecord({ title: 'Kazi ya Kwanza', status: 'Tayari' })\n",
-                "    .then(res => console.log('Imehifadhiwa:', res));\n",
-                "```\n\n",
-                "- **Async Handling**: Msimbo huu unafanya kazi kikamilifu kwenye vivinjari au mazingira ya Node.js bila kuhitaji intaneti."
-            )
-        }
-
-        // --- 4. SQL / DATABASE ---
-        lower.contains("sql") || lower.contains("database") || lower.contains("table") || lower.contains("query") -> {
-            listOf(
-                "Hapa kuna muundo safi wa hifadhidata ya SQL wenye ufunguo mkuu (Primary Key), mahusiano, na fahirisi (Indexes):\n\n",
-                "```SQL\n",
-                "-- 1. Jedwali la Watumiaji\n",
-                "CREATE TABLE IF NOT EXISTS users (\n",
-                "    id VARCHAR(36) PRIMARY KEY,\n",
-                "    username VARCHAR(50) NOT NULL UNIQUE,\n",
-                "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n",
-                ");\n\n",
-                "-- 2. Jedwali la Mazungumzo\n",
-                "CREATE TABLE IF NOT EXISTS chat_sessions (\n",
-                "    session_id VARCHAR(36) PRIMARY KEY,\n",
-                "    user_id VARCHAR(36) REFERENCES users(id) ON DELETE CASCADE,\n",
-                "    title VARCHAR(120) NOT NULL,\n",
-                "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n",
-                ");\n\n",
-                "-- 3. Fahirisi ya kuongeza kasi ya utafutaji (Index)\n",
-                "CREATE INDEX idx_sessions_user ON chat_sessions(user_id);\n\n",
-                "-- 4. Hoja ya kusoma vikao vilivyoboreshwa hivi karibuni\n",
-                "SELECT session_id, title, updated_at \n",
-                "FROM chat_sessions \n",
-                "WHERE user_id = 'user_01' \n",
-                "ORDER BY updated_at DESC \n",
-                "LIMIT 10;\n",
-                "```\n\n",
-                "- **Utendaji**: Fahirisi ya `idx_sessions_user` inahakikisha hoja (query) inakimbia kwa kasi ya juu hata data zikiwa nyingi."
-            )
-        }
-
-        // --- 5. BASH / SHELL SCRIPTING ---
-        lower.contains("bash") || lower.contains("shell") || lower.contains("linux") || lower.contains("terminal") -> {
-            listOf(
-                "Hapa kuna hati ya Bash (Shell Script) iliyosanifiwa kufuata miongozo thabiti ya uzuiaji hitilafu (`set -euo pipefail`):\n\n",
-                "```BASH\n",
-                "#!/usr/bin/env bash\n",
-                "set -euo pipefail\n\n",
-                "# Sauti Offline Automation Utility\n",
-                "LOG_FILE=\"sauti_system.log\"\n",
-                "TARGET_DIR=\"\${'$'}{1:-./backup}\"\n\n",
-                "echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] Kuanzisha zoezi...\" | tee -a \"\$LOG_FILE\"\n\n",
-                "if [ ! -d \"\$TARGET_DIR\" ]; then\n",
-                "    mkdir -p \"\$TARGET_DIR\"\n",
-                "    echo \"Imeunda folda jipya: \$TARGET_DIR\" | tee -a \"\$LOG_FILE\"\n",
-                "fi\n\n",
-                "echo \"Hali ya hifadhi ya ndani:\" | tee -a \"\$LOG_FILE\"\n",
-                "df -h . | tee -a \"\$LOG_FILE\"\n\n",
-                "echo \"[\$(date '+%Y-%m-%d %H:%M:%S')] Zoezi limekamilika salama.\" | tee -a \"\$LOG_FILE\"\n",
-                "```\n\n",
-                "- **Usalama**: Amri ya `set -euo pipefail` inahakikisha skripti inasimama mara moja ikitokea hitilafu yoyote au kigezo kisichojulikana."
-            )
-        }
-
-        // --- 6. GENERAL CODING / PROGRAMMING ---
-        lower.contains("code") || lower.contains("function") || lower.contains("algorithm") || lower.contains("program") || lower.contains("script") -> {
-            listOf(
-                "Hapa kuna suluhisho la kiprogramu lililoundwa kwa kanuni za usanifu bora wa programu:\n\n",
-                "```PYTHON\n",
-                "# Kanuni ya uchakataji wa haraka (Quick Data Processing)\n",
-                "def binary_search(arr: list, target: int) -> int:\n",
-                "    \"\"\"Inatafuta namba kwa kasi ya O(log N).\"\"\"\n",
-                "    left, right = 0, len(arr) - 1\n",
-                "    while left <= right:\n",
-                "        mid = (left + right) // 2\n",
-                "        if arr[mid] == target:\n",
-                "            return mid\n",
-                "        elif arr[mid] < target:\n",
-                "            left = mid + 1\n",
-                "        else:\n",
-                "            right = mid - 1\n",
-                "    return -1\n\n",
-                "# Mfano wa matumizi:\n",
-                "numbers = [2, 5, 8, 12, 16, 23, 38, 56, 72, 91]\n",
-                "index = binary_search(numbers, 23)\n",
-                "print(f'Namba 23 imepatikana kwenye nafasi ya: {index}')\n",
-                "```\n\n",
-                "### Muhtasari:\n",
-                "- Ufanisi wa muda: O(log N).\n",
-                "- Ufanisi wa kumbukumbu: O(1).\n",
-                "- Msimbo unaweza kubadilishwa kwa urahisi kutumika kwenye lugha yoyote (Kotlin, Java, JavaScript, C++)."
-            )
-        }
-
-        // --- 7. GENERAL QUESTIONS & EXPLANATIONS ---
-        lower.contains("jinsi") || lower.contains("kwanini") || lower.contains("nielezee") || lower.contains("fafanua") || lower.contains("maana") || lower.contains("explain") || lower.contains("how") -> {
-            listOf(
-                "Kuhusu hoja yako: **\"$clean\"**, hapa kuna ufafanuzi wa kina na wa kueleweka:\n\n",
-                "### 1. Msingi Mkuu\n",
-                "Jambo hili linajengwa juu ya kuelewa vigezo vikuu vinavyoendesha matokeo unayoyatafuta. Kila hatua inahitaji mpangilio wa kimantiki kuanzia chanzo hadi hatua ya mwisho.\n\n",
-                "### 2. Hatua za Utekelezaji\n",
-                "- **Hatua ya Kwanza**: Bainisha lengo kuu na vigezo unavyohitaji kabla ya kuanza.\n",
-                "- **Hatua ya Pili**: Tekeleza mradi kwa awamu ndogo ndogo ili kupunguza ugumu na makosa.\n",
-                "- **Hatua ya Tatu**: Kagua matokeo na ufanye marekebisho yanayohitajika.\n\n",
-                "### 3. Ushauri Muhimu\n",
-                "Kujifunza kwa vitendo na kutekeleza suluhisho za moja kwa moja ndio njia bora ya kupata ufumbuzi wa kudumu. Unaweza pia kuniuliza swali la nyongeza au kuniomba nikuandikie msimbo wa kusaidia jambo hili."
-            )
-        }
-
-        // --- 8. CASUAL GREETINGS & PERSONAL ASSISTANT ---
-        lower.contains("habari") || lower.contains("mambo") || lower.contains("hello") || lower.contains("hi") || lower.contains("vipi") -> {
-            listOf(
-                "Habari! Mimi ni **Sauti**, msaidizi wako binafsi unayeweza kunitumia bila intaneti.\n\n",
-                "### Ninachoweza Kukusaidia:\n",
-                "- **Kuandika Msimbo (Coding)**: Python, Kotlin, JavaScript, SQL, HTML/CSS, na Bash.\n",
-                "- **Kutatua Changamoto za Kiufundi**: Kueleza mifumo ya programu na kurekebisha makosa (debugging).\n",
-                "- **Kujibu Maswali & Kutoa Maarifa**: Ufafanuzi wa mada mbalimbali, kuandika makala, barua na mawazo mapya.\n",
-                "- **Mawasiliano ya Sauti**: Unaweza kuongea nami kwa sauti au kusikiliza majibu yangu kwa kubonyeza alama ya spika.\n\n",
-                "Je, ungependa tuanze na nini leo?"
-            )
-        }
-
-        // --- 9. DEFAULT / GENERAL PROMPT ---
-        else -> {
-            listOf(
-                "Nimepokea hoja yako: **\"$clean\"**.\n\n",
-                "Hapa kuna muhtasari na mapendekezo ya utekelezaji:\n\n",
-                "### Mambo Muhimu ya Kuzingatia\n",
-                "- **Uchambuzi wa Hoja**: Hoja hii inahitaji mpangilio ulio wazi ili kufikia matokeo yenye tija.\n",
-                "- **Utekelezaji wa Moja kwa Moja**: Kama unahitaji msimbo (code), andika tu jina la lugha kama vile `Python`, `Kotlin` au `SQL`, nami nitakutengenezea suluhisho mara moja.\n",
-                "- **Hifadhi ya Ndani**: Mazungumzo haya yamehifadhiwa salama kwenye simu yako bila kutegemea mtandao wa nje."
-            )
-        }
-    }
-
-    // Stream out chunks progressively with micro-delays
-    for (chunk in chunks) {
-        delay(60)
-        emit(chunk)
-    }
+fun generateStreamingTokens(prompt: String): Flow<String> {
+    return com.sauti.app.sauti.SautiEngineLoader.generateStreamingResponse(prompt)
 }
-
 @Composable
 fun ChatScreen(
     onVoiceClick: () -> Unit = {},
@@ -388,7 +147,7 @@ fun ChatScreen(
             ChatSession(
                 id = "session_default",
                 title = "New Topic",
-                messages = mutableListOf()
+                messages = androidx.compose.runtime.mutableStateListOf()
             )
         )
     }
@@ -511,6 +270,68 @@ fun ChatScreen(
                                 fontFamily = FontFamily.Default
                             ),
                             cursorBrush = SolidColor(Color(0xFF38BDF8)),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                imeAction = androidx.compose.ui.text.input.ImeAction.Send
+                            ),
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                onSend = {
+                                    if (!isGenerating && inputMessage.isNotBlank()) {
+                                        val userPrompt = inputMessage.trim()
+                                        inputMessage = ""
+
+                                        val userMsg = ConversationalMessage(
+                                            id = System.currentTimeMillis().toString(),
+                                            isUser = true,
+                                            text = userPrompt
+                                        )
+                                        activeSession.messages.add(userMsg)
+
+                                        val assistantMsgId = (System.currentTimeMillis() + 1).toString()
+                                        val assistantPlaceholder = ConversationalMessage(
+                                            id = assistantMsgId,
+                                            isUser = false,
+                                            text = "",
+                                            tokensPerSec = "0.0 t/s",
+                                            isStreaming = true
+                                        )
+                                        activeSession.messages.add(assistantPlaceholder)
+                                        isGenerating = true
+
+                                        coroutineScope.launch {
+                                            val startTime = System.currentTimeMillis()
+                                            var tokenCount = 0
+                                            val accumulated = StringBuilder()
+
+                                            generateStreamingTokens(userPrompt).collect { token ->
+                                                accumulated.append(token)
+                                                tokenCount++
+                                                val elapsedSec = ((System.currentTimeMillis() - startTime).coerceAtLeast(1L)) / 1000.0
+                                                val currentTps = String.format(Locale.US, "%.1f t/s", (tokenCount / elapsedSec))
+
+                                                val index = activeSession.messages.indexOfFirst { it.id == assistantMsgId }
+                                                if (index != -1) {
+                                                    activeSession.messages[index] = activeSession.messages[index].copy(
+                                                        text = accumulated.toString(),
+                                                        tokensPerSec = currentTps,
+                                                        isStreaming = true
+                                                    )
+                                                }
+                                            }
+
+                                            val finalElapsedSec = ((System.currentTimeMillis() - startTime).coerceAtLeast(1L)) / 1000.0
+                                            val finalTps = String.format(Locale.US, "%.1f t/s", (tokenCount / finalElapsedSec))
+                                            val finalIndex = activeSession.messages.indexOfFirst { it.id == assistantMsgId }
+                                            if (finalIndex != -1) {
+                                                activeSession.messages[finalIndex] = activeSession.messages[finalIndex].copy(
+                                                    tokensPerSec = finalTps,
+                                                    isStreaming = false
+                                                )
+                                            }
+                                            isGenerating = false
+                                        }
+                                    }
+                                }
+                            ),
                             decorationBox = { innerTextField ->
                                 if (inputMessage.isEmpty()) {
                                     Text(

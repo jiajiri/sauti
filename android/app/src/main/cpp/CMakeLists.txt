@@ -4,10 +4,24 @@ project("sauti_native_engine")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Optimization flags for ARM mobile architectures (NEON SIMD)
+# Optimization flags for mobile architectures
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm|aarch64")
-    add_compile_options(-O3 -ffast-math)
+    add_compile_options(-O3 -fno-finite-math-only)
 endif()
+
+# llama.cpp flags
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
+set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "Do not build examples" FORCE)
+set(LLAMA_BUILD_TESTS OFF CACHE BOOL "Do not build tests" FORCE)
+set(LLAMA_BUILD_SERVER OFF CACHE BOOL "Do not build server" FORCE)
+
+add_subdirectory(llama.cpp)
+
+# whisper.cpp flags
+set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "Do not build examples" FORCE)
+set(WHISPER_BUILD_TESTS OFF CACHE BOOL "Do not build tests" FORCE)
+
+add_subdirectory(whisper.cpp)
 
 add_library(
     sauti_native_engine
@@ -18,15 +32,16 @@ add_library(
 target_include_directories(
     sauti_native_engine
     PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-find_library(
-    log-lib
-    log
+    
+    /llama.cpp/include
+    /llama.cpp/ggml/include
+    /whisper.cpp/include
 )
 
 target_link_libraries(
     sauti_native_engine
-    ${log-lib}
+    llama
+    whisper
+    log
+    android
 )

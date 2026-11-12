@@ -19,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -84,6 +85,11 @@ class MainActivity : ComponentActivity() {
             // Non-fatal audio recorder fallback
         }
 
+        ttsEngine = TextToSpeechEngine(this)
+        // Extract model weights from assets to app private storage and initialize native engines
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            com.sauti.app.sauti.SautiEngineLoader.ensureAssetsRegistered(applicationContext)
+        }
         val sautiDb = SautiDatabase.getInstance(this)
 
         setContent {
@@ -126,15 +132,19 @@ fun SautiMainApp(
     val chatSessions by viewModel.chatSessions.collectAsState()
     val activeSessionId by viewModel.activeSessionId.collectAsState()
 
-    PermanentNavigationDrawer(
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val coroutineScope = rememberCoroutineScope()
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = true,
         drawerContent = {
-            PermanentDrawerSheet(
+            ModalDrawerSheet(
                 drawerContainerColor = Color(0xFF0D0E11),
+                drawerShape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp),
                 modifier = Modifier
                     .width(300.dp)
                     .fillMaxHeight()
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
             ) {
                 Column(
                     modifier = Modifier
@@ -180,7 +190,7 @@ fun SautiMainApp(
                     ) {
                         // "New chat" button: triggers database insert creating a blank session ID dynamically
                         Surface(
-                            onClick = { viewModel.createNewSession() },
+                            onClick = { viewModel.createNewSession(); coroutineScope.launch { drawerState.close() } },
                             shape = RoundedCornerShape(24.dp),
                             color = Color(0xFF1E222A),
                             modifier = Modifier
@@ -214,7 +224,7 @@ fun SautiMainApp(
                             icon = Icons.Outlined.ChatBubbleOutline,
                             label = "Chat",
                             isSelected = currentWorkspace == SautiWorkspace.CHAT_WORKSPACE,
-                            onClick = { viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE) }
+                            onClick = { viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE); coroutineScope.launch { drawerState.close() } }
                         )
 
                         // AUDIO_WORKSPACE
@@ -222,7 +232,7 @@ fun SautiMainApp(
                             icon = Icons.Outlined.Mic,
                             label = "Audio Mode",
                             isSelected = currentWorkspace == SautiWorkspace.AUDIO_WORKSPACE,
-                            onClick = { viewModel.selectWorkspace(SautiWorkspace.AUDIO_WORKSPACE) }
+                            onClick = { viewModel.selectWorkspace(SautiWorkspace.AUDIO_WORKSPACE); coroutineScope.launch { drawerState.close() } }
                         )
 
                         // LIBRARY_WORKSPACE
@@ -230,7 +240,7 @@ fun SautiMainApp(
                             icon = Icons.Outlined.GridView,
                             label = "Library",
                             isSelected = currentWorkspace == SautiWorkspace.LIBRARY_WORKSPACE,
-                            onClick = { viewModel.selectWorkspace(SautiWorkspace.LIBRARY_WORKSPACE) }
+                            onClick = { viewModel.selectWorkspace(SautiWorkspace.LIBRARY_WORKSPACE); coroutineScope.launch { drawerState.close() } }
                         )
 
                         // NOTEBOOKS_WORKSPACE
@@ -238,7 +248,7 @@ fun SautiMainApp(
                             icon = Icons.Outlined.Folder,
                             label = "Notebooks",
                             isSelected = currentWorkspace == SautiWorkspace.NOTEBOOKS_WORKSPACE,
-                            onClick = { viewModel.selectWorkspace(SautiWorkspace.NOTEBOOKS_WORKSPACE) }
+                            onClick = { viewModel.selectWorkspace(SautiWorkspace.NOTEBOOKS_WORKSPACE); coroutineScope.launch { drawerState.close() } }
                         )
                     }
 
@@ -297,7 +307,7 @@ fun SautiMainApp(
                                 val isCurrent = session.id == activeSessionId &&
                                         currentWorkspace == SautiWorkspace.CHAT_WORKSPACE
                                 Surface(
-                                    onClick = { viewModel.selectSession(session.id) },
+                                    onClick = { viewModel.selectSession(session.id); coroutineScope.launch { drawerState.close() } },
                                     shape = RoundedCornerShape(12.dp),
                                     color = if (isCurrent) Color(0xFF1E2430) else Color.Transparent,
                                     modifier = Modifier
@@ -334,7 +344,7 @@ fun SautiMainApp(
                         profile = userProfile,
                         onSettingsClick = {
                             // Parameter 4: Smoothly route viewport layout to LIBRARY_WORKSPACE subscreen
-                            viewModel.selectWorkspace(SautiWorkspace.LIBRARY_WORKSPACE)
+                            viewModel.selectWorkspace(SautiWorkspace.LIBRARY_WORKSPACE); coroutineScope.launch { drawerState.close() }
                         }
                     )
                 }
@@ -350,7 +360,7 @@ fun SautiMainApp(
                 SautiWorkspace.CHAT_WORKSPACE -> {
                     ChatScreen(
                         onVoiceClick = { viewModel.selectWorkspace(SautiWorkspace.AUDIO_WORKSPACE) },
-                        onDrawerClick = { /* No-op: Sidebar is permanently visible */ }
+                        onDrawerClick = { coroutineScope.launch { drawerState.open() } }
                     )
                 }
                 SautiWorkspace.AUDIO_WORKSPACE -> {

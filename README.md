@@ -18,7 +18,7 @@ Over 200 million people speak Swahili and regional African dialects (blending Sw
 
 1. **Total Cloud Dependency**: Cloud-gated assistants stop functioning when mobile data runs out, connectivity drops in rural zones, or latency spikes.
 2. **Heavy Hardware Demands**: Modern multi-billion parameter models require high-end flagship phones (8GB–16GB RAM) or cloud subscriptions, leaving users on standard 2GB–4GB physical RAM devices behind.
-3. **Dialect & Context Erasure**: Standard models struggle with everyday African code-switching (*"Niko na code hapa lakini inakataa ku-run"*).
+3. **Dialect & Context Erasure**: Standard models struggle with everyday African code-switching.
 4. **Data Privacy & Surveillance**: Critical medical records, proprietary codebases, passwords, and sensitive conversations are uploaded to third-party servers outside African jurisdiction.
 
 **Sauti solves this by running quantized on-device SLMs (Small Language Models) and Whisper ASR models locally**, bounded strictly under a 250MB memory footprint with zero cloud egress (`android.permission.INTERNET` is not included in the manifest).
@@ -70,20 +70,11 @@ Over 200 million people speak Swahili and regional African dialects (blending Sw
 
 ## Engineering Features
 
-### 1. Zero Internet Permission (`android.permission.INTERNET` Excluded)
-The application manifest intentionally omits internet access:
-```xml
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.sauti.app">
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- Zero network permission: guaranteed local privacy -->
-</manifest>
-```
-All audio processing, feature extraction, code generation, and mathematical reasoning execute locally inside native C++ memory buffers.
+### 1. Zero Internet Permission Model
+`AndroidManifest.xml` deliberately excludes `android.permission.INTERNET`. Model loading, speech transcription, text generation, and credential hashing operate strictly locally in isolated device memory.
 
-### 2. Low-Level DSA: O(1) Lock-Free SPSC Audio Buffer
-To eliminate audio frame dropping and prevent Android UI thread stutter, audio samples flow through an $O(1)$ Single-Producer Single-Consumer (SPSC) circular queue (`ring_buffer.h`):
+### 2. Lock-Free Audio Pipeline (DSA)
+To guarantee real-time audio throughput without GC pauses or buffer drops, audio ingest is backed by a cache-aligned Single-Producer Single-Consumer (SPSC) circular queue (`ring_buffer.h`):
 - **Fixed Capacity**: 65,536 samples (power-of-two for bitwise masking without modulo division).
 - **Cache-Line Alignment**: `alignas(64)` on head and tail atomic pointers to eliminate false sharing between CPU cores.
 - **Acquire-Release Semantics**: Atomic memory fences ensure thread safety without mutexes, yielding zero runtime allocations.
@@ -134,6 +125,10 @@ Designed with a minimal obsidian aesthetic inspired by high-performance mobile A
 │           │   ├── audio/
 │           │   │   ├── AudioRecorderManager.kt # Dynamic hardware device input binder
 │           │   │   └── AudioRoutingManager.kt  # System headset / USB-C route detector
+│           │   ├── sauti/
+│           │   │   └── SautiEngineLoader.kt    # Native whisper & llama GGUF model loader
+│           │   ├── tts/
+│           │   │   └── TextToSpeechEngine.kt   # Offline voice synthesis engine
 │           │   └── ui/
 │           │       ├── screens/
 │           │       │   ├── ChatScreen.kt      # Sauti offline speech & coding chat
@@ -147,6 +142,7 @@ Designed with a minimal obsidian aesthetic inspired by high-performance mobile A
 ├── models/
 │   └── grammars/
 │       └── swahili_cleanup.gbnf               # GBNF zero-hallucination grammar
+├── .env.example                               # Environment template for Android keystore
 └── README.md
 ```
 
