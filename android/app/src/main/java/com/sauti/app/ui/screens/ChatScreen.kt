@@ -54,6 +54,7 @@ data class ConversationalMessage(
     val id: String,
     val isUser: Boolean,
     val text: String,
+    val tokensPerSec: String = "",
     val isStreaming: Boolean = false
 )
 
@@ -222,7 +223,7 @@ fun ChatScreen(
                             ChatSession(
                                 id = newSessionId,
                                 title = "New Topic",
-                                messages = mutableListOf()
+                                messages = mutableStateListOf()
                             )
                         )
                         activeSessionId = newSessionId
@@ -297,7 +298,7 @@ fun ChatScreen(
                                         activeSession.messages.add(assistantPlaceholder)
                                         isGenerating = true
 
-                                        coroutineScope.launch {
+                                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                                             val startTime = System.currentTimeMillis()
                                             var tokenCount = 0
                                             val accumulated = StringBuilder()
@@ -308,26 +309,30 @@ fun ChatScreen(
                                                 val elapsedSec = ((System.currentTimeMillis() - startTime).coerceAtLeast(1L)) / 1000.0
                                                 val currentTps = String.format(Locale.US, "%.1f t/s", (tokenCount / elapsedSec))
 
-                                                val index = activeSession.messages.indexOfFirst { it.id == assistantMsgId }
-                                                if (index != -1) {
-                                                    activeSession.messages[index] = activeSession.messages[index].copy(
-                                                        text = accumulated.toString(),
-                                                        tokensPerSec = currentTps,
-                                                        isStreaming = true
-                                                    )
+                                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                    val index = activeSession.messages.indexOfFirst { it.id == assistantMsgId }
+                                                    if (index != -1) {
+                                                        activeSession.messages[index] = activeSession.messages[index].copy(
+                                                            text = accumulated.toString(),
+                                                            tokensPerSec = currentTps,
+                                                            isStreaming = true
+                                                        )
+                                                    }
                                                 }
                                             }
 
                                             val finalElapsedSec = ((System.currentTimeMillis() - startTime).coerceAtLeast(1L)) / 1000.0
                                             val finalTps = String.format(Locale.US, "%.1f t/s", (tokenCount / finalElapsedSec))
-                                            val finalIndex = activeSession.messages.indexOfFirst { it.id == assistantMsgId }
-                                            if (finalIndex != -1) {
-                                                activeSession.messages[finalIndex] = activeSession.messages[finalIndex].copy(
-                                                    tokensPerSec = finalTps,
-                                                    isStreaming = false
-                                                )
+                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                val finalIndex = activeSession.messages.indexOfFirst { it.id == assistantMsgId }
+                                                if (finalIndex != -1) {
+                                                    activeSession.messages[finalIndex] = activeSession.messages[finalIndex].copy(
+                                                        tokensPerSec = finalTps,
+                                                        isStreaming = false
+                                                    )
+                                                }
+                                                isGenerating = false
                                             }
-                                            isGenerating = false
                                         }
                                     }
                                 }

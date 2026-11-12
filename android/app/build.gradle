@@ -7,7 +7,7 @@ plugins {
 android {
     namespace 'com.sauti.app'
     compileSdk 34
-    ndkVersion '28.2.13676358'
+    ndkVersion '25.1.8937393'
 
     defaultConfig {
         applicationId "com.sauti.app"

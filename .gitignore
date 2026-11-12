@@ -21,6 +21,8 @@ build/
 *.safetensors
 *.pt
 *.onnx
+models_store/
+benchmarks/audio_test/
 
 # Allow GBNF grammars inside models/
 !models/grammars/

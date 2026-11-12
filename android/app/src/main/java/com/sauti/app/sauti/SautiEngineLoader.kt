@@ -3,7 +3,9 @@ package com.sauti.app.sauti
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import java.io.File
@@ -17,9 +19,15 @@ object SautiEngineLoader {
 
     private const val TAG = "SautiEngineLoader"
 
-    // Asset Directory Paths
-    const val ASSET_SAUTI_VOICE = "sauti/voice.bin"
-    const val ASSET_SAUTI_CORE = "sauti/core.bin"
+    // Tiered Asset Directory Paths
+    const val ASSET_SAUTI_VOICE_LITE = "sauti/voice_lite.bin"
+    const val ASSET_SAUTI_VOICE_PRO = "sauti/voice_pro.bin"
+    const val ASSET_SAUTI_CORE_LITE = "sauti/core_lite.bin"
+    const val ASSET_SAUTI_CORE_PRO = "sauti/core_pro.bin"
+
+    // Backward compatibility aliases
+    const val ASSET_SAUTI_VOICE = ASSET_SAUTI_VOICE_LITE
+    const val ASSET_SAUTI_CORE = ASSET_SAUTI_CORE_PRO
 
     private var sautiVoicePath: String? = null
     private var sautiCorePath: String? = null
@@ -49,18 +57,21 @@ object SautiEngineLoader {
             sautiDir.mkdirs()
         }
 
-        val voiceFile = File(sautiDir, "voice.bin")
+        val voiceFile = File(sautiDir, "voice_lite.bin")
         if (!voiceFile.exists() || voiceFile.length() == 0L) {
-            copyAssetToFile(context, ASSET_SAUTI_VOICE, voiceFile)
+            copyAssetToFile(context, ASSET_SAUTI_VOICE_LITE, voiceFile)
         }
 
-        val coreFile = File(sautiDir, "core.bin")
+        val coreFile = File(sautiDir, "core_pro.bin")
         if (!coreFile.exists() || coreFile.length() == 0L) {
-            copyAssetToFile(context, ASSET_SAUTI_CORE, coreFile)
+            copyAssetToFile(context, ASSET_SAUTI_CORE_PRO, coreFile)
         }
 
         sautiVoicePath = voiceFile.absolutePath
         sautiCorePath = coreFile.absolutePath
+
+        // Initialize local SQLite RAG store
+        initKnowledgeStore(context)
 
         try {
             nativeInitVoiceEngine(sautiVoicePath!!)
@@ -90,43 +101,73 @@ object SautiEngineLoader {
         }
     }
 
+    private var knowledgeDatabase: com.sauti.app.rag.SovereignKnowledgeDatabase? = null
+
     /**
-     * Streams tokens from on-device model using strict ChatML formatting:
+     * Initializes knowledge database for offline RAG retrieval.
+     */
+    fun initKnowledgeStore(context: Context) {
+        if (knowledgeDatabase == null) {
+            knowledgeDatabase = com.sauti.app.rag.SovereignKnowledgeDatabase(context)
+        }
+    }
+
+    /**
+     * Streams tokens from on-device model using strict ChatML formatting, strict language mirroring, and RAG context injection:
      * <|im_start|>system ... <|im_start|>user ... <|im_start|>assistant
      */
-    fun generateStreamingResponse(userPrompt: String): Flow<String> = flow {
+    fun generateStreamingResponse(userPrompt: String): Flow<String> = kotlinx.coroutines.flow.callbackFlow {
+        val clean = userPrompt.trim()
+        val intent = com.sauti.app.rag.IntentClassifier.classify(clean)
+        val detectedLang = com.sauti.app.rag.LanguageDetector.detect(clean)
+
+        // Retrieve local domain context whenever available from Sovereign Knowledge Store
+        val retrievedContext = if (knowledgeDatabase != null) {
+            val chunks = knowledgeDatabase!!.searchKnowledge(clean, maxResults = 2)
+            if (chunks.isNotEmpty()) {
+                "\n[MUKTADHA WA NDANI / VERIFIED LOCAL CONTEXT]\n" + chunks.joinToString("\n") + "\n"
+            } else ""
+        } else ""
+
+        val systemLanguageInstruction = if (detectedLang == com.sauti.app.rag.DetectedLanguage.SWAHILI) {
+            "Wewe ni Sauti AI, msaidizi mahiri wa kiteknolojia na uprogramu. Jibu kila swali kwa Kiswahili Sanifu na Fasaha cha Tanzania na Afrika Mashariki. Toa majibu kamili ya moja kwa moja bila kutumia maneno yasiyoeleweka."
+        } else {
+            "You are Sauti AI, an intelligent coding and technical assistant. Reply directly with complete code or solution."
+        }
+
         val formattedPrompt = buildString {
             append("<|im_start|>system\n")
-            append("You are an offline sovereign AI assistant fine-tuned for East African users. You answer accurately, reason step-by-step through math and code, and communicate in natural Swahili and English without simulating future conversational turns.<|im_end|>\n")
+            append(systemLanguageInstruction)
+            if (retrievedContext.isNotBlank()) {
+                append("\nBase your answer strictly on the provided verified context:\n")
+                append(retrievedContext)
+            }
+            append("<|im_end|>\n")
             append("<|im_start|>user\n")
-            append(userPrompt.trim())
+            append(clean)
             append("<|im_end|>\n")
             append("<|im_start|>assistant\n")
         }
 
         var tokensEmitted = false
-        val tokenList = java.util.Collections.synchronizedList(mutableListOf<String>())
         try {
             nativeGenerateChatCompletion(formattedPrompt) { token ->
-                tokenList.add(token)
+                tokensEmitted = true
+                trySend(token)
             }
         } catch (e: Throwable) {
             Log.w(TAG, "Native inference error: " + e.message)
         }
 
-        if (tokenList.isNotEmpty()) {
-            tokensEmitted = true
-            for (token in tokenList) {
-                emit(token)
+        // If native inference was unavailable or failed to produce tokens, provide direct step-by-step reasoning based on the actual prompt
+        if (!tokensEmitted) {
+            emitDirectReasoning(userPrompt).collect { chunk ->
+                trySend(chunk)
             }
         }
 
-        // If native inference was unavailable, provide direct step-by-step reasoning based on the actual prompt
-        if (!tokensEmitted) {
-            emitDirectReasoning(userPrompt).collect { chunk ->
-                emit(chunk)
-            }
-        }
+        close()
+        awaitClose { /* Cleanup when flow collection cancelled */ }
     }.flowOn(Dispatchers.IO)
 
     private fun emitDirectReasoning(prompt: String): Flow<String> = flow {
@@ -169,11 +210,16 @@ Result computed on-device.""")
             return@flow
         }
 
-        // 4. Code Generation
-        if (lower.contains("code") || lower.contains("python") || lower.contains("function") || lower.contains("algorithm")) {
-            emit("""Here is the requested implementation:
-
-Optimized for local on-device execution.""")
+        // 4. Code Generation fallback — provide a real stub
+        if (lower.contains("code") || lower.contains("python") || lower.contains("function") ||
+            lower.contains("algorithm") || lower.contains("andika") || lower.contains("unda")) {
+            val lang = if (lower.contains("python")) "python" else if (lower.contains("kotlin")) "kotlin" else if (lower.contains("java")) "java" else "python"
+            emit("""```$lang
+# Mfano wa msimbo (model offline — tafadhali ongeza muktadha zaidi)
+def sauti_function():
+    pass
+```
+Tafadhali eleza zaidi ili nipate msimbo kamili.""")
             return@flow
         }
 

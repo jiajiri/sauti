@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <mutex>
 #include <atomic>
+#include <thread>
 #include <android/log.h>
 #include "ring_buffer.h"
 #include "memory_manager.h"
@@ -56,8 +57,9 @@ static void ensureLlamaModelLoaded() {
     }
 
     llama_context_params ctx_params = llama_context_default_params();
-    ctx_params.n_ctx = 2048;
-    ctx_params.n_threads = 4;
+    ctx_params.n_ctx = 1024;
+    unsigned int hw_threads = std::thread::hardware_concurrency();
+    ctx_params.n_threads = (hw_threads > 0) ? std::min(hw_threads, 4u) : 2;
     ctx_params.n_batch = 512;
 
     g_llama_context = llama_init_from_model(g_llama_model, ctx_params);
@@ -270,21 +272,59 @@ Java_com_sauti_app_sauti_SautiEngineLoader_nativeGenerateChatCompletion(
         return;
     }
 
-    // Evaluate prompt tokens using llama_batch_get_one
-    struct llama_batch prompt_batch = llama_batch_get_one(prompt_tokens.data(), prompt_tokens.size());
-    if (llama_decode(g_llama_context, prompt_batch) != 0) {
-        LOGE("Failed to decode prompt.");
-        return;
+    // Clear memory / KV cache before decoding new prompt
+    llama_memory_clear(llama_get_memory(g_llama_context), true);
+
+    // Evaluate prompt tokens in safe chunks of n_batch
+    int32_t n_batch = llama_n_batch(g_llama_context);
+    llama_pos current_pos = 0;
+    for (size_t i = 0; i < prompt_tokens.size(); i += n_batch) {
+        int32_t n_eval = std::min((int32_t)(prompt_tokens.size() - i), n_batch);
+        llama_batch batch = llama_batch_init(n_eval, 0, 1);
+        for (int32_t j = 0; j < n_eval; ++j) {
+            batch.token[j] = prompt_tokens[i + j];
+            batch.pos[j] = current_pos + j;
+            batch.n_seq_id[j] = 1;
+            batch.seq_id[j][0] = 0;
+            batch.logits[j] = (i + j == prompt_tokens.size() - 1);
+        }
+        batch.n_tokens = n_eval;
+
+        int ret = llama_decode(g_llama_context, batch);
+        llama_batch_free(batch);
+        if (ret != 0) {
+            LOGE("Failed to decode prompt chunk at offset %zu (ret=%d)", i, ret);
+            return;
+        }
+        current_pos += n_eval;
     }
 
-    // Init greedy sampler
+    // Production LLMOps Sampling Pipeline:
+    // 1. Penalties sampler: penalizes repeated n-grams to kill degeneration loops (e.g. Stateflow.process() loops)
+    //    penalty_last_n=64 tokens, repeat_penalty=1.20f, freq_penalty=0.40f, presence_penalty=0.20f
+    // 2. Top-K filtering (k=40)
+    // 3. Top-P nucleus filtering (p=0.90)
+    // 4. Min-P filtering (p=0.05) to eliminate long-tail hallucination tokens
+    // 5. Temperature scaling (temp=0.7)
+    // 6. Distribution sampler with stable seed for token selection
     auto sparams = llama_sampler_chain_default_params();
     llama_sampler* smpl = llama_sampler_chain_init(sparams);
-    llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
 
-    // Generate up to 256 tokens
-    int n_cur = prompt_tokens.size();
-    for (int iter = 0; iter < 256; ++iter) {
+    const int32_t n_vocab = llama_vocab_n_tokens(vocab);
+    llama_sampler_chain_add(smpl, llama_sampler_init_penalties(n_vocab, 64, 1.25f, 0.50f, 0.30f));
+    llama_sampler_chain_add(smpl, llama_sampler_init_top_k(40));
+    llama_sampler_chain_add(smpl, llama_sampler_init_top_p(0.90f, 1));
+    llama_sampler_chain_add(smpl, llama_sampler_init_min_p(0.05f, 1));
+    llama_sampler_chain_add(smpl, llama_sampler_init_temp(0.7f));
+    llama_sampler_chain_add(smpl, llama_sampler_init_dist(42));
+
+    // CRITICAL: Feed all prompt tokens into the sampler chain so penalty/repetition tracking works on full context!
+    for (size_t i = 0; i < prompt_tokens.size(); ++i) {
+        llama_sampler_accept(smpl, prompt_tokens[i]);
+    }
+
+    // Generate up to 512 tokens (enough for full function code blocks)
+    for (int iter = 0; iter < 512; ++iter) {
         llama_token new_token_id = llama_sampler_sample(smpl, g_llama_context, -1);
         llama_sampler_accept(smpl, new_token_id);
 
@@ -301,11 +341,21 @@ Java_com_sauti_app_sauti_SautiEngineLoader_nativeGenerateChatCompletion(
             env->DeleteLocalRef(jPiece);
         }
 
-        struct llama_batch single_batch = llama_batch_get_one(&new_token_id, 1);
-        if (llama_decode(g_llama_context, single_batch) != 0) {
-            LOGE("Failed to decode token during generation.");
+        llama_batch single_batch = llama_batch_init(1, 0, 1);
+        single_batch.token[0] = new_token_id;
+        single_batch.pos[0] = current_pos;
+        single_batch.n_seq_id[0] = 1;
+        single_batch.seq_id[0][0] = 0;
+        single_batch.logits[0] = true;
+        single_batch.n_tokens = 1;
+
+        int ret = llama_decode(g_llama_context, single_batch);
+        llama_batch_free(single_batch);
+        if (ret != 0) {
+            LOGE("Failed to decode token during generation (ret=%d)", ret);
             break;
         }
+        current_pos++;
     }
 
     llama_sampler_free(smpl);
