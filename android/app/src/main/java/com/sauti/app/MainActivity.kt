@@ -44,23 +44,46 @@ import com.sauti.app.viewmodel.SautiWorkspace
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var ttsEngine: TextToSpeechEngine
-    private lateinit var powerManager: PowerHardwareManager
-    private lateinit var audioRecorderManager: AudioRecorderManager
+    private var ttsEngine: TextToSpeechEngine? = null
+    private var powerManager: PowerHardwareManager? = null
+    private var audioRecorderManager: AudioRecorderManager? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
+        try {
+            enableEdgeToEdge()
+        } catch (e: Exception) {
+            // Non-fatal edge-to-edge fallback
+        }
         super.onCreate(savedInstanceState)
 
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
-            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
-        )
-        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        try {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+            )
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        } catch (e: Exception) {
+            // Non-fatal window flag fallback
+        }
 
-        ttsEngine = TextToSpeechEngine(this)
-        powerManager = PowerHardwareManager(this)
-        audioRecorderManager = AudioRecorderManager(this)
+        try {
+            ttsEngine = TextToSpeechEngine(this)
+        } catch (e: Exception) {
+            // Non-fatal TTS fallback
+        }
+
+        try {
+            powerManager = PowerHardwareManager(this)
+        } catch (e: Exception) {
+            // Non-fatal power hardware fallback
+        }
+
+        try {
+            audioRecorderManager = AudioRecorderManager(this)
+        } catch (e: Exception) {
+            // Non-fatal audio recorder fallback
+        }
+
         val sautiDb = SautiDatabase.getInstance(this)
 
         setContent {
@@ -81,9 +104,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        ttsEngine.shutdown()
-        powerManager.teardown()
-        audioRecorderManager.stopListening()
+        ttsEngine?.shutdown()
+        powerManager?.teardown()
+        audioRecorderManager?.stopListening()
     }
 }
 

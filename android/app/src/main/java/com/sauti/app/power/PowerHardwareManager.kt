@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
+import android.os.Build
 import android.view.WindowManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +30,8 @@ class PowerHardwareManager(private val activity: Activity) {
 
     private val _isLowPower = MutableStateFlow(false)
     val isLowPower: StateFlow<Boolean> = _isLowPower.asStateFlow()
+
+    private var isReceiverRegistered = false
 
     private val powerReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -72,14 +75,24 @@ class PowerHardwareManager(private val activity: Activity) {
     }
 
     init {
-        val filter = IntentFilter().apply {
-            addAction(Intent.ACTION_POWER_CONNECTED)
-            addAction(Intent.ACTION_POWER_DISCONNECTED)
-            addAction(Intent.ACTION_BATTERY_CHANGED)
-            addAction(Intent.ACTION_BATTERY_LOW)
-            addAction(Intent.ACTION_BATTERY_OKAY)
+        try {
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_POWER_CONNECTED)
+                addAction(Intent.ACTION_POWER_DISCONNECTED)
+                addAction(Intent.ACTION_BATTERY_CHANGED)
+                addAction(Intent.ACTION_BATTERY_LOW)
+                addAction(Intent.ACTION_BATTERY_OKAY)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                activity.registerReceiver(powerReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                activity.registerReceiver(powerReceiver, filter)
+            }
+            isReceiverRegistered = true
+        } catch (e: Exception) {
+            // Graceful fallback if security exception or battery not supported
+            isReceiverRegistered = false
         }
-        activity.registerReceiver(powerReceiver, filter)
     }
 
     /**
@@ -87,10 +100,14 @@ class PowerHardwareManager(private val activity: Activity) {
      */
     fun setVoiceScreenAwake(keepAwake: Boolean) {
         activity.runOnUiThread {
-            if (keepAwake) {
-                activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            } else {
-                activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            try {
+                if (keepAwake) {
+                    activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                } else {
+                    activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+            } catch (e: Exception) {
+                // Non-fatal
             }
         }
     }
@@ -99,10 +116,14 @@ class PowerHardwareManager(private val activity: Activity) {
      * Unregisters broadcast receivers.
      */
     fun teardown() {
-        try {
-            activity.unregisterReceiver(powerReceiver)
-        } catch (e: Exception) {
-            // Already unregistered
+        if (isReceiverRegistered) {
+            try {
+                activity.unregisterReceiver(powerReceiver)
+            } catch (e: Exception) {
+                // Already unregistered
+            } finally {
+                isReceiverRegistered = false
+            }
         }
     }
 }

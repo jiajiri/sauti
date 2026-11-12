@@ -41,34 +41,46 @@ class AudioRoutingManager(private val context: Context) {
     private var deviceCallback: AudioDeviceCallback? = null
 
     init {
-        detectCurrentActiveDevices()
-        registerDeviceCallbacks()
+        try {
+            detectCurrentActiveDevices()
+            registerDeviceCallbacks()
+        } catch (e: Exception) {
+            Log.w(tag, "Audio routing setup fallback: ${e.message}")
+        }
     }
 
     /**
      * Inspects currently attached hardware audio devices.
      */
     fun detectCurrentActiveDevices() {
-        val inputDevices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
-        val outputDevices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-        evaluateRouting(inputDevices, outputDevices)
+        try {
+            val inputDevices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+            val outputDevices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            evaluateRouting(inputDevices, outputDevices)
+        } catch (e: Exception) {
+            Log.w(tag, "Could not inspect active audio devices: ${e.message}")
+        }
     }
 
     private fun registerDeviceCallbacks() {
-        deviceCallback = object : AudioDeviceCallback() {
-            override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
-                super.onAudioDevicesAdded(addedDevices)
-                Log.i(tag, "Hardware Interrupt: Audio Device(s) connected -> ${addedDevices?.size ?: 0}")
-                detectCurrentActiveDevices()
-            }
+        try {
+            deviceCallback = object : AudioDeviceCallback() {
+                override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+                    super.onAudioDevicesAdded(addedDevices)
+                    Log.i(tag, "Hardware Interrupt: Audio Device(s) connected -> ${addedDevices?.size ?: 0}")
+                    detectCurrentActiveDevices()
+                }
 
-            override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
-                super.onAudioDevicesRemoved(removedDevices)
-                Log.i(tag, "Hardware Interrupt: Audio Device(s) disconnected -> ${removedDevices?.size ?: 0}")
-                detectCurrentActiveDevices()
+                override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
+                    super.onAudioDevicesRemoved(removedDevices)
+                    Log.i(tag, "Hardware Interrupt: Audio Device(s) disconnected -> ${removedDevices?.size ?: 0}")
+                    detectCurrentActiveDevices()
+                }
             }
+            audioManager.registerAudioDeviceCallback(deviceCallback, null)
+        } catch (e: Exception) {
+            Log.w(tag, "AudioDeviceCallback registration fallback: ${e.message}")
         }
-        audioManager.registerAudioDeviceCallback(deviceCallback, null)
     }
 
     private fun evaluateRouting(inputs: Array<AudioDeviceInfo>, outputs: Array<AudioDeviceInfo>) {
