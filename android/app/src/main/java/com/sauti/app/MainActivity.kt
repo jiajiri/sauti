@@ -38,7 +38,7 @@ import com.sauti.app.power.PowerHardwareManager
 import com.sauti.app.tts.TextToSpeechEngine
 import com.sauti.app.ui.screens.ChatScreen
 import com.sauti.app.ui.screens.VoiceModeScreen
-import com.sauti.app.ui.theme.SautiThemeLegacy
+import com.sauti.app.ui.theme.SautiTheme
 import com.sauti.app.viewmodel.SautiNavigationViewModel
 import com.sauti.app.viewmodel.SautiWorkspace
 
@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity() {
         val sautiDb = SautiDatabase.getInstance(this)
 
         setContent {
-            SautiThemeLegacy {
+            SautiTheme {
                 val viewModel: SautiNavigationViewModel = viewModel(
                     factory = object : ViewModelProvider.Factory {
                         @Suppress("UNCHECKED_CAST")
@@ -341,7 +341,7 @@ fun SautiMainApp(
                 SautiWorkspace.LIBRARY_WORKSPACE -> {
                     WorkspacePlaceholderView(
                         title = "Library Workspace",
-                        subtitle = "Saved prompt templates, custom vocabulary & clinical assets",
+                        subtitle = "Saved code snippets, prompt templates & offline notes",
                         icon = Icons.Outlined.GridView,
                         onReturnToChat = { viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE) }
                     )

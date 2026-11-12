@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Backspace
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentPaste
@@ -32,7 +33,7 @@ import com.sauti.app.ui.components.LocalAiVoiceOrb
 
 /**
  * Mobile-responsive IME keyboard layout with:
- * - Dynamic clipboard paste popup banner ([ Paste ] ✕) as shown in Image 2.
+ * - Dynamic clipboard paste popup banner ([ Paste ] Close)
  * - Accessibility Node semantics (screen readers).
  * - Multi-touch motion event dispatching.
  * - Sleek dark AMOLED styling matching modern mobile keyboards.
@@ -59,7 +60,7 @@ fun ComposeKeyboardLayout(
             .padding(horizontal = 4.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        // --- 1. Clipboard Paste Popup Tooltip (Matching Image 2: [ Paste ] ✕) ---
+        // --- 1. Clipboard Paste Popup Tooltip ([ Paste ] Close) ---
         if (showPasteBanner && clipboardPreviewText != null) {
             Row(
                 modifier = Modifier
@@ -188,7 +189,12 @@ fun ComposeKeyboardLayout(
                     .background(Color(0xFF262C38)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "⇧", color = Color(0xFFCBD5E1), fontSize = 16.sp)
+                Icon(
+                    imageVector = Icons.Default.ArrowUpward,
+                    contentDescription = "Shift",
+                    tint = Color(0xFFCBD5E1),
+                    modifier = Modifier.size(17.dp)
+                )
             }
 
             listOf("z", "x", "c", "v", "b", "n", "m").forEach { char ->

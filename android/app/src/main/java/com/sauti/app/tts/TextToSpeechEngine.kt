@@ -89,7 +89,7 @@ class TextToSpeechEngine(
         stop()
 
         if (hasNativeSwahiliVoice && isReady.get()) {
-            val utteranceId = "sauti_african_swahili_${System.currentTimeMillis()}"
+            val utteranceId = "sauti_voice_${System.currentTimeMillis()}"
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) { onStart() }
                 override fun onDone(utteranceId: String?) { onDone() }

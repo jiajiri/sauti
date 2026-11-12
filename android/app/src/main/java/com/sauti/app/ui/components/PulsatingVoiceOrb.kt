@@ -17,8 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.sauti.app.ui.theme.AccentEmerald
-import com.sauti.app.ui.theme.AccentEmeraldGlow
+import com.sauti.app.ui.theme.PrimaryBlue
+import com.sauti.app.ui.theme.AccentTeal
 
 /**
  * Centered pulsating acoustic voice orb.
@@ -64,8 +64,8 @@ fun PulsatingVoiceOrb(
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        AccentEmeraldGlow.copy(alpha = if (isRecording) 0.55f else 0.25f),
-                        AccentEmerald.copy(alpha = if (isRecording) 0.25f else 0.08f),
+                        AccentTeal.copy(alpha = if (isRecording) 0.55f else 0.25f),
+                        PrimaryBlue.copy(alpha = if (isRecording) 0.25f else 0.08f),
                         Color.Transparent
                     )
                 ),
@@ -78,7 +78,7 @@ fun PulsatingVoiceOrb(
             val coreRadius = (size.minDimension / 2.0f) * (if (isRecording) 1.0f + (normalizedAmplitude * 0.15f) else 1.0f)
             drawCircle(
                 brush = Brush.linearGradient(
-                    colors = listOf(AccentEmerald, AccentEmeraldGlow)
+                    colors = listOf(PrimaryBlue, AccentTeal)
                 ),
                 radius = coreRadius
             )

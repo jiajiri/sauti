@@ -29,12 +29,12 @@ class DynamicVadController {
 
     enum class VadOperatingMode(val baseSensitivity: Float) {
         QUIET_INDOOR(0.12f),
-        NORMAL_CLINIC(0.18f),
+        STANDARD_ROOM(0.18f),
         NOISY_OUTDOOR(0.28f),
         HIGH_GAIN_USB(0.15f)
     }
 
-    private var currentMode: VadOperatingMode = VadOperatingMode.NORMAL_CLINIC
+    private var currentMode: VadOperatingMode = VadOperatingMode.STANDARD_ROOM
 
     /**
      * Updates route-based default sensitivity when hardware route changes.
@@ -42,9 +42,9 @@ class DynamicVadController {
     fun onAudioRouteChanged(route: AudioRoutingManager.AudioRouteType) {
         currentMode = when (route) {
             is AudioRoutingManager.AudioRouteType.UsbCHeadset -> VadOperatingMode.HIGH_GAIN_USB
-            is AudioRoutingManager.AudioRouteType.BluetoothSco -> VadOperatingMode.NORMAL_CLINIC
-            is AudioRoutingManager.AudioRouteType.WiredHeadset -> VadOperatingMode.NORMAL_CLINIC
-            else -> VadOperatingMode.NORMAL_CLINIC
+            is AudioRoutingManager.AudioRouteType.BluetoothSco -> VadOperatingMode.STANDARD_ROOM
+            is AudioRoutingManager.AudioRouteType.WiredHeadset -> VadOperatingMode.STANDARD_ROOM
+            else -> VadOperatingMode.STANDARD_ROOM
         }
         recalculateThreshold()
     }

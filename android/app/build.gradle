@@ -6,6 +6,7 @@ plugins {
 android {
     namespace 'com.sauti.app'
     compileSdk 34
+    ndkVersion '28.2.13676358'
 
     defaultConfig {
         applicationId "com.sauti.app"
@@ -33,9 +34,20 @@ android {
         noCompress 'bin', 'gguf'
     }
 
+    // Split APKs configuration for modular release builds (armeabi-v7a, arm64-v8a, x86_64)
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+            universalApk true
+        }
+    }
+
     buildTypes {
         release {
-            minifyEnabled true
+            signingConfig signingConfigs.debug
+            minifyEnabled false
             shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
@@ -80,6 +92,10 @@ dependencies {
     // Security & Biometrics
     implementation 'androidx.biometric:biometric:1.2.0-alpha05'
     implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+
+    // Room Persistence Database
+    implementation 'androidx.room:room-runtime:2.6.1'
+    implementation 'androidx.room:room-ktx:2.6.1'
 
     // Jetpack Compose & Material 3
     implementation platform('androidx.compose:compose-bom:2024.05.00')

@@ -50,7 +50,7 @@ fun VoiceModeScreen(
     isSpeaking: Boolean = false,
     onCloseClick: () -> Unit = {},
     onToggleVoice: () -> Unit = {},
-    onSubmitTriageQuery: (String) -> Unit = {}
+    onSubmitVoiceQuery: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -75,9 +75,9 @@ fun VoiceModeScreen(
     // Hardware routing dynamic status
     val hardwareRoutingText = remember(currentRouteState) {
         if (currentRouteState.isExternal) {
-            "Listening via Headset Mic 🎧"
+            "Listening via Headset Microphone"
         } else {
-            "Listening via Device Mic 🎙️"
+            "Listening via Device Microphone"
         }
     }
 
@@ -131,7 +131,7 @@ fun VoiceModeScreen(
                     timestamp = System.currentTimeMillis()
                 )
             )
-            onSubmitTriageQuery(textToSave)
+            onSubmitVoiceQuery(textToSave)
         }
     }
 

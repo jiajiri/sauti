@@ -4,6 +4,5 @@
     <string name="ime_name">Sauti Voice Keyboard (Offline)</string>
     <string name="subtype_swahili">Kiswahili</string>
     <string name="subtype_english">English</string>
-    <string name="clinic_name_default">Kibaha District Vaccine Depot</string>
-    <string name="staff_id_default">dr_kagame</string>
+    <string name="user_name_default">Mtumiaji</string>
 </resources>

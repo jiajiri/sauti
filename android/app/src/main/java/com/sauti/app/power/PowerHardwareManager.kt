@@ -55,10 +55,10 @@ class PowerHardwareManager(private val activity: Activity) {
 
                     _chargingType.value = when {
                         !isChargingNow -> "On Battery"
-                        chargePlug == BatteryManager.BATTERY_PLUGGED_AC -> "Charging (AC) ⚡"
-                        chargePlug == BatteryManager.BATTERY_PLUGGED_USB -> "Charging (USB) ⚡"
-                        chargePlug == BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Charging (Wireless) ⚡"
-                        else -> "Charging ⚡"
+                        chargePlug == BatteryManager.BATTERY_PLUGGED_AC -> "Charging (AC)"
+                        chargePlug == BatteryManager.BATTERY_PLUGGED_USB -> "Charging (USB)"
+                        chargePlug == BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Charging (Wireless)"
+                        else -> "Charging"
                     }
                 }
                 Intent.ACTION_BATTERY_LOW -> {
