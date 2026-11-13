@@ -2,20 +2,22 @@ package com.sauti.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Obsidian Sovereign Dark Palette - Sleek, Enterprise-grade Dark Mode
-val BackgroundMatte = Color(0xFF0B0E14)
-val BackgroundDark = Color(0xFF0B0E14)
-val SurfaceCard = Color(0xFF121721)
-val SurfaceDark = Color(0xFF121721)
-val SurfaceElevated = Color(0xFF171D2A)
-val SurfaceInput = Color(0xFF171D2A)
-val BorderSubtle = Color(0xFF1E2638)
-val BorderActive = Color(0xFF2E3B54)
+// Obsidian Sovereign AMOLED Dark Palette - Sleek, Enterprise-grade Dark Mode
+val BackgroundMatte = Color(0xFF000000)
+val BackgroundDark = Color(0xFF000000)
+val SurfaceCard = Color(0xFF171717)
+val SurfaceDark = Color(0xFF171717)
+val SurfaceElevated = Color(0xFF1E1E1E)
+val SurfaceInput = Color(0xFF1E1E1E)
+val PillBackground = Color(0xFF262626)
+val BorderSubtle = Color(0xFF262626)
+val BorderActive = Color(0xFF333333)
+val DividerHairline = Color(0xFF2C2C2C)
 
 // Primary Accents
-val PrimaryBlue = Color(0xFF0072F5)
-val PrimaryBlueMuted = Color(0xFF1E3A8A)
-val AccentTeal = Color(0xFF0284C7)
+val PrimaryBlue = Color(0xFF2563EB)
+val PrimaryBlueMuted = Color(0xFF1D4ED8)
+val AccentTeal = Color(0xFF3B82F6)
 
 // Functional Status Indicators (Clean, minimal feedback)
 val StatusNominal = Color(0xFF10B981)   // Success / Active

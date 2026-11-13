@@ -1,14 +1,7 @@
 package com.sauti.app.ui.screens
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
-import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -28,29 +21,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.launch
 import com.sauti.app.tts.TextToSpeechEngine
-import com.sauti.app.ui.theme.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import java.util.Locale
 
-/**
- * Conversational message model.
- */
+// ── Obsidian Pure Black AMOLED Tokens ────────────────────────────────────────
+private val CanvasBlack  = Color(0xFF000000)
+private val ChipDarkFill = Color(0xFF1E1E1E)
+private val PillInputBg  = Color(0xFF1E1E1E)
+private val AccentBlue   = Color(0xFF2563EB)
+private val TextWhite    = Color(0xFFFFFFFF)
+private val TextMuted    = Color(0xFF9E9E9E)
+private val BtnWhite     = Color(0xFFFFFFFF)
+
 data class ConversationalMessage(
     val id: String,
     val isUser: Boolean,
@@ -59,80 +50,15 @@ data class ConversationalMessage(
     val isStreaming: Boolean = false
 )
 
-/**
- * Session model for topic threads.
- */
-data class ChatSession(
-    val id: String,
-    val title: String,
-    val timestamp: Long = System.currentTimeMillis(),
-    val messages: androidx.compose.runtime.snapshots.SnapshotStateList<ConversationalMessage> = androidx.compose.runtime.mutableStateListOf()
-)
-
-/**
- * Parsed markdown content block (Text vs Code Block).
- */
-sealed class ContentBlock {
-    data class Text(val content: String) : ContentBlock()
-    data class Code(val language: String, val code: String) : ContentBlock()
-}
-
-/**
- * Parses markdown string into structured text blocks and code blocks.
- */
-fun parseMarkdownContent(raw: String): List<ContentBlock> {
-    val blocks = mutableListOf<ContentBlock>()
-    val lines = raw.split("\n")
-    var inCodeBlock = false
-    var currentLanguage = "CODE"
-    val codeBuilder = StringBuilder()
-    val textBuilder = StringBuilder()
-
-    for (line in lines) {
-        val trimmed = line.trimStart()
-        if (trimmed.startsWith("```")) {
-            if (inCodeBlock) {
-                // Closing code block
-                blocks.add(ContentBlock.Code(currentLanguage, codeBuilder.toString().trimEnd()))
-                codeBuilder.clear()
-                inCodeBlock = false
-            } else {
-                // Opening code block
-                if (textBuilder.isNotEmpty()) {
-                    blocks.add(ContentBlock.Text(textBuilder.toString().trimEnd()))
-                    textBuilder.clear()
-                }
-                val langTag = trimmed.removePrefix("```").trim().ifEmpty { "CODE" }.uppercase()
-                currentLanguage = langTag
-                inCodeBlock = true
-            }
-        } else {
-            if (inCodeBlock) {
-                if (codeBuilder.isNotEmpty()) codeBuilder.append("\n")
-                codeBuilder.append(line)
-            } else {
-                if (textBuilder.isNotEmpty()) textBuilder.append("\n")
-                textBuilder.append(line)
-            }
-        }
-    }
-
-    if (inCodeBlock && codeBuilder.isNotEmpty()) {
-        blocks.add(ContentBlock.Code(currentLanguage, codeBuilder.toString().trimEnd()))
-    } else if (textBuilder.isNotEmpty()) {
-        blocks.add(ContentBlock.Text(textBuilder.toString().trimEnd()))
-    }
-
-    return blocks
-}
-
-/**
- * Offline Intelligent Agent Response Synthesizer (Sauti Engine).
- * Covers Coding, General Reasoning, Problem Solving, and Conversational Q&A.
- */
 fun generateStreamingTokens(prompt: String): Flow<String> {
     return com.sauti.app.sauti.SautiEngineLoader.generateStreamingResponse(prompt)
 }
+
+/**
+ * Main Chat & Home Screen strictly modeled after Reference 6.
+ * Features the "Put Sauti to work" centerpiece with two staggered chip rows,
+ * white CTA button, and docked pill composer with live-waveform button.
+ */
 @Composable
 fun ChatScreen(
     onVoiceClick: () -> Unit = {},
@@ -148,12 +74,10 @@ fun ChatScreen(
     val activeSessionTitle by viewModel?.activeSessionTitle?.collectAsState() ?: remember { mutableStateOf("New Chat") }
     val persistedMessages by viewModel?.activeMessages?.collectAsState() ?: remember { mutableStateOf(emptyList<com.sauti.app.data.local.ChatMessage>()) }
 
-    // Transient streaming state for currently generating message
     var streamingMessage by remember { mutableStateOf<ConversationalMessage?>(null) }
     var inputMessage by remember { mutableStateOf("") }
     var isGenerating by remember { mutableStateOf(false) }
 
-    // Combined messages: database-persisted messages + active streaming placeholder
     val displayMessages = remember(persistedMessages, streamingMessage) {
         val list = persistedMessages.map { dbMsg ->
             ConversationalMessage(
@@ -176,15 +100,58 @@ fun ChatScreen(
 
     LaunchedEffect(lastItemIndex, lastMessageContentLength) {
         if (lastItemIndex >= 0) {
-            val isNearBottom = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index?.let {
-                it >= lastItemIndex - 1
-            } ?: true
+            listState.animateScrollToItem(lastItemIndex)
+        }
+    }
 
-            if (isNearBottom) {
-                if (displayMessages.lastOrNull()?.isStreaming == true && lastMessageContentLength > 20) {
-                    listState.scrollToItem(lastItemIndex)
-                } else {
-                    listState.animateScrollToItem(lastItemIndex)
+    fun submitPrompt(promptText: String) {
+        if (!isGenerating && promptText.isNotBlank()) {
+            val userPrompt = promptText.trim()
+            inputMessage = ""
+
+            val currentSId = activeSessionId ?: "default"
+            viewModel?.updateSessionTitleIfDefault(currentSId, userPrompt)
+            viewModel?.saveMessage(currentSId, isUser = true, text = userPrompt)
+
+            val assistantMsgId = (System.currentTimeMillis() + 1).toString()
+            streamingMessage = ConversationalMessage(
+                id = assistantMsgId,
+                isUser = false,
+                text = "",
+                tokensPerSec = "0.0 t/s",
+                isStreaming = true
+            )
+            isGenerating = true
+
+            coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val startTime = System.currentTimeMillis()
+                var tokenCount = 0
+                val accumulated = StringBuilder()
+
+                generateStreamingTokens(userPrompt).collect { token ->
+                    accumulated.append(token)
+                    tokenCount++
+                    val elapsedSec = ((System.currentTimeMillis() - startTime).coerceAtLeast(1L)) / 1000.0
+                    val currentTps = String.format(Locale.US, "%.1f t/s", (tokenCount / elapsedSec))
+
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        streamingMessage = streamingMessage?.copy(
+                            text = accumulated.toString(),
+                            tokensPerSec = currentTps,
+                            isStreaming = true
+                        )
+                    }
+                }
+
+                val finalElapsedSec = ((System.currentTimeMillis() - startTime).coerceAtLeast(1L)) / 1000.0
+                val finalTps = String.format(Locale.US, "%.1f t/s", (tokenCount / finalElapsedSec))
+                val finalResponse = accumulated.toString()
+
+                viewModel?.saveMessage(currentSId, isUser = false, text = finalResponse, tokensPerSec = finalTps)
+
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    streamingMessage = null
+                    isGenerating = false
                 }
             }
         }
@@ -196,377 +163,277 @@ fun ChatScreen(
             .statusBarsPadding()
             .navigationBarsPadding()
             .imePadding(),
-        containerColor = Color.Black,
+        containerColor = CanvasBlack,
         topBar = {
-            // Dynamic Top Bar: shows current active session title
+            // Top App Bar (Reference 6): Circular menu button, pill badge, circular new chat action
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Circular menu button
                 IconButton(
                     onClick = onDrawerClick,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(ChipDarkFill)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Menu,
                         contentDescription = "Menu",
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
+                        tint = TextWhite,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
-                Text(
-                    text = activeSessionTitle,
-                    color = Color(0xFFE2E8F0),
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.2.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-                )
+                // Center subtle pill badge ("Sauti")
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = ChipDarkFill,
+                    modifier = Modifier.height(34.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AutoAwesome,
+                            contentDescription = null,
+                            tint = AccentBlue,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = if (displayMessages.isEmpty()) "Sauti" else activeSessionTitle,
+                            color = TextWhite,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
 
+                // Circular new chat action button
                 IconButton(
-                    onClick = {
-                        viewModel?.createNewSession()
-                    },
-                    modifier = Modifier.size(36.dp)
+                    onClick = { viewModel?.createNewSession() },
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(ChipDarkFill)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Edit,
-                        contentDescription = "New Session",
-                        tint = Color(0xFFCBD5E1),
+                        contentDescription = "New Chat",
+                        tint = TextWhite,
                         modifier = Modifier.size(20.dp)
                     )
                 }
             }
         },
         bottomBar = {
-            // Anchored Floating Input Capsule
-            Surface(
+            // Docked Pill Composer Bar (Reference 6)
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .zIndex(10f),
-                color = Color.Black,
-                tonalElevation = 0.dp
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Box(
+                // Pill Container
+                Surface(
+                    shape = RoundedCornerShape(28.dp),
+                    color = PillInputBg,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                        .clip(RoundedCornerShape(32.dp))
-                        .background(Color(0xFF1E232A))
-                        .border(0.5.dp, Color(0xFF333B48), RoundedCornerShape(32.dp))
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .weight(1f)
+                        .height(54.dp)
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        // Input Field
+                        // Leading '+' attachment button
+                        Icon(
+                            imageVector = Icons.Outlined.Add,
+                            contentDescription = "Attach",
+                            tint = TextMuted,
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clickable { /* Attachment trigger */ }
+                        )
+
+                        // Center Input Field
                         BasicTextField(
                             value = inputMessage,
                             onValueChange = { inputMessage = it },
+                            modifier = Modifier.weight(1f),
                             textStyle = TextStyle(
-                                color = Color.White,
+                                color = TextWhite,
                                 fontSize = 15.sp,
                                 fontFamily = FontFamily.Default
                             ),
-                            cursorBrush = SolidColor(Color(0xFF38BDF8)),
+                            cursorBrush = SolidColor(AccentBlue),
                             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                                 imeAction = androidx.compose.ui.text.input.ImeAction.Send
                             ),
                             keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                                onSend = {
-                                    if (!isGenerating && inputMessage.isNotBlank()) {
-                                        val userPrompt = inputMessage.trim()
-                                        inputMessage = ""
-
-                                        val currentSId = activeSessionId ?: "default"
-                                        viewModel?.updateSessionTitleIfDefault(currentSId, userPrompt)
-                                        viewModel?.saveMessage(currentSId, isUser = true, text = userPrompt)
-
-                                        val assistantMsgId = (System.currentTimeMillis() + 1).toString()
-                                        streamingMessage = ConversationalMessage(
-                                            id = assistantMsgId,
-                                            isUser = false,
-                                            text = "",
-                                            tokensPerSec = "0.0 t/s",
-                                            isStreaming = true
-                                        )
-                                        isGenerating = true
-
-                                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                            val startTime = System.currentTimeMillis()
-                                            var tokenCount = 0
-                                            val accumulated = StringBuilder()
-
-                                            generateStreamingTokens(userPrompt).collect { token ->
-                                                accumulated.append(token)
-                                                tokenCount++
-                                                val elapsedSec = ((System.currentTimeMillis() - startTime).coerceAtLeast(1L)) / 1000.0
-                                                val currentTps = String.format(Locale.US, "%.1f t/s", (tokenCount / elapsedSec))
-
-                                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                                    streamingMessage = streamingMessage?.copy(
-                                                        text = accumulated.toString(),
-                                                        tokensPerSec = currentTps,
-                                                        isStreaming = true
-                                                    )
-                                                }
-                                            }
-
-                                            val finalElapsedSec = ((System.currentTimeMillis() - startTime).coerceAtLeast(1L)) / 1000.0
-                                            val finalTps = String.format(Locale.US, "%.1f t/s", (tokenCount / finalElapsedSec))
-                                            val finalResponse = accumulated.toString()
-
-                                            // Persist completed assistant message to SQLite
-                                            viewModel?.saveMessage(currentSId, isUser = false, text = finalResponse, tokensPerSec = finalTps)
-
-                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                                streamingMessage = null
-                                                isGenerating = false
-                                            }
-                                        }
-                                    }
-                                }
+                                onSend = { submitPrompt(inputMessage) }
                             ),
                             decorationBox = { innerTextField ->
                                 if (inputMessage.isEmpty()) {
                                     Text(
-                                        text = "Andika swali au omba code hapa...",
-                                        color = Color(0xFF64748B),
-                                        fontSize = 14.sp,
-                                        maxLines = 1
+                                        text = "Ask Sauti...",
+                                        color = TextMuted,
+                                        fontSize = 15.sp
                                     )
                                 }
                                 innerTextField()
-                            },
-                            modifier = Modifier.weight(1f)
+                            }
                         )
 
-                        Spacer(modifier = Modifier.width(6.dp))
-
-                        // Mic Button
-                        IconButton(
-                            onClick = onVoiceClick,
-                            modifier = Modifier.size(34.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Mic,
-                                contentDescription = "Voice Input",
-                                tint = Color(0xFFCBD5E1),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(4.dp))
-
-                        // Send Arrow
-                        if (inputMessage.isNotBlank()) {
-                            IconButton(
-                                onClick = {
-                                    if (!isGenerating) {
-                                        val userPrompt = inputMessage.trim()
-                                        inputMessage = ""
-
-                                        val currentSId = activeSessionId ?: "default"
-                                        viewModel?.updateSessionTitleIfDefault(currentSId, userPrompt)
-                                        viewModel?.saveMessage(currentSId, isUser = true, text = userPrompt)
-
-                                        val assistantMsgId = (System.currentTimeMillis() + 1).toString()
-                                        streamingMessage = ConversationalMessage(
-                                            id = assistantMsgId,
-                                            isUser = false,
-                                            text = "",
-                                            tokensPerSec = "0.0 t/s",
-                                            isStreaming = true
-                                        )
-                                        isGenerating = true
-
-                                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                            val startTime = System.currentTimeMillis()
-                                            var tokenCount = 0
-                                            val accumulated = StringBuilder()
-
-                                            generateStreamingTokens(userPrompt).collect { token ->
-                                                accumulated.append(token)
-                                                tokenCount++
-                                                val elapsedSec = ((System.currentTimeMillis() - startTime).coerceAtLeast(1L)) / 1000.0
-                                                val currentTps = String.format(Locale.US, "%.1f t/s", (tokenCount / elapsedSec))
-
-                                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                                    streamingMessage = streamingMessage?.copy(
-                                                        text = accumulated.toString(),
-                                                        tokensPerSec = currentTps,
-                                                        isStreaming = true
-                                                    )
-                                                }
-                                            }
-
-                                            val finalElapsedSec = ((System.currentTimeMillis() - startTime).coerceAtLeast(1L)) / 1000.0
-                                            val finalTps = String.format(Locale.US, "%.1f t/s", (tokenCount / finalElapsedSec))
-                                            val finalResponse = accumulated.toString()
-
-                                            viewModel?.saveMessage(currentSId, isUser = false, text = finalResponse, tokensPerSec = finalTps)
-
-                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                                streamingMessage = null
-                                                isGenerating = false
-                                            }
-                                        }
-                                    }
-                                },
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF0284C7))
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.ArrowUpward,
-                                    contentDescription = "Send",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
+                        // Dictation Microphone Icon
+                        Icon(
+                            imageVector = Icons.Outlined.Mic,
+                            contentDescription = "Speak",
+                            tint = TextMuted,
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clickable { onVoiceClick() }
+                        )
                     }
+                }
+
+                // Far-Right Circular Blue Live-Waveform Button (Reference 6)
+                IconButton(
+                    onClick = onVoiceClick,
+                    modifier = Modifier
+                        .size(54.dp)
+                        .clip(CircleShape)
+                        .background(AccentBlue)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.GraphicEq,
+                        contentDescription = "Live Voice Mode",
+                        tint = TextWhite,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
         }
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            ) {
-                if (displayMessages.isEmpty()) {
-                    // Minimalist Empty State
-                    Column(
+            if (displayMessages.isEmpty()) {
+                // ── Empty State Centerpiece (Reference 6) ─────────────────────────
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Put Sauti to work",
+                        color = TextWhite,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.5).sp
+                    )
+
+                    Spacer(modifier = Modifier.height(28.dp))
+
+                    // Row 1: Staggered horizontal scrolling chips
+                    Row(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF161A22))
-                                .border(1.dp, Color(0xFF232A38), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Code,
-                                contentDescription = "Sauti Agent",
-                                tint = Color(0xFF38BDF8),
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
+                        SuggestionChipItem(
+                            icon = Icons.Outlined.Translate,
+                            label = "Practice Swahili",
+                            onClick = { submitPrompt("Hujambo Sauti, tuongee kwa Kiswahili fasaha kuhusu siku yangu.") }
+                        )
+                        SuggestionChipItem(
+                            icon = Icons.Outlined.Place,
+                            label = "Plan my weekend",
+                            onClick = { submitPrompt("Nipe mpango mzuri wa kutumia wikendi yangu kwa utulivu.") }
+                        )
+                        SuggestionChipItem(
+                            icon = Icons.Outlined.MusicNote,
+                            label = "Stories & culture",
+                            onClick = { submitPrompt("Niambie hadithi ya kusisimua kuhusu utamaduni wa pwani.") }
+                        )
+                    }
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
+                    // Row 2: Staggered horizontal scrolling chips
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        SuggestionChipItem(
+                            icon = Icons.Outlined.Description,
+                            label = "Draft a document",
+                            onClick = { submitPrompt("Andika barua rasmi ya kuomba kazi kwa lugha ya kitaalamu.") }
+                        )
+                        SuggestionChipItem(
+                            icon = Icons.Outlined.Summarize,
+                            label = "Summarize text",
+                            onClick = { submitPrompt("Fafanua kwa ufupi mambo makuu ya kuzingatia unapoanza biashara.") }
+                        )
+                        SuggestionChipItem(
+                            icon = Icons.Outlined.Code,
+                            label = "Write code",
+                            onClick = { submitPrompt("Andika function ya Python inayopanga data haraka.") }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(28.dp))
+
+                    // Centered High-Contrast White Pill CTA Button (Reference 6)
+                    Button(
+                        onClick = { submitPrompt("Niambie jinsi unavyoweza kunisaidia leo kama msaidizi wa kibinafsi.") },
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BtnWhite,
+                            contentColor = Color.Black
+                        ),
+                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                    ) {
                         Text(
-                            text = "Sauti Offline Agent",
-                            color = Color.White,
-                            fontSize = 22.sp,
+                            text = "Pick a task",
+                            color = Color.Black,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
                         )
-
-                        Text(
-                            text = "Code generation, general reasoning & voice assistant",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-
-                        Spacer(modifier = Modifier.height(28.dp))
-
-                        // Interactive Prompt Chips
-                        val starterPrompts = listOf(
-                            "Andika function ya Python ya...",
-                            "Kotlin Coroutines StateFlow mfano",
-                            "Tengeneza SQL query ya...",
-                            "Nielezee jinsi ya kuunda API..."
-                        )
-
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            starterPrompts.forEach { prompt ->
-                                Surface(
-                                    onClick = { inputMessage = prompt },
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = Color(0xFF141720),
-                                    border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF222838)),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Terminal,
-                                            contentDescription = null,
-                                            tint = Color(0xFF38BDF8),
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Text(
-                                            text = prompt,
-                                            color = Color(0xFFCBD5E1),
-                                            fontSize = 13.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
                     }
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp)
-                    ) {
-                        items(displayMessages, key = { it.id }) { msg ->
-                            if (msg.isUser) {
-                                UserMessageBubble(
-                                    message = msg,
-                                    onCopy = {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("Prompt", msg.text))
-                                        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
-                                    }
-                                )
-                            } else {
-                                AssistantMessageBubble(
-                                    message = msg,
-                                    onCopy = {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        val cleanText = cleanMarkdownForClipboard(msg.text)
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("Response", cleanText))
-                                        Toast.makeText(context, "Copied response", Toast.LENGTH_SHORT).show()
-                                    },
-                                    onRead = {
-                                        val cleanText = cleanMarkdownForClipboard(msg.text)
-                                        ttsEngine.speak(cleanText)
-                                    }
-                                )
-                            }
-                        }
+                }
+            } else {
+                // ── Conversational Message Feed ───────────────────────────────────
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(top = 12.dp, bottom = 16.dp)
+                ) {
+                    items(displayMessages, key = { it.id }) { msg ->
+                        MessageBubbleRow(
+                            message = msg,
+                            onSpeakClick = { ttsEngine.speak(msg.text) }
+                        )
                     }
                 }
             }
@@ -574,339 +441,97 @@ fun ChatScreen(
     }
 }
 
-/**
- * User message bubble aligned to the right.
- */
 @Composable
-private fun UserMessageBubble(
-    message: ConversationalMessage,
-    onCopy: () -> Unit
+private fun SuggestionChipItem(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.End
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
+        color = ChipDarkFill,
+        modifier = Modifier.height(44.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .widthIn(max = 280.dp)
-                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 4.dp, bottomStart = 16.dp, bottomEnd = 16.dp))
-                .background(Color(0xFF1E2430))
-                .border(0.5.dp, Color(0xFF2C3547), RoundedCornerShape(topStart = 16.dp, topEnd = 4.dp, bottomStart = 16.dp, bottomEnd = 16.dp))
-                .clickable { onCopy() }
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = TextWhite,
+                modifier = Modifier.size(18.dp)
+            )
             Text(
-                text = message.text,
-                color = Color.White,
+                text = label,
+                color = TextWhite,
                 fontSize = 14.sp,
-                lineHeight = 20.sp
+                fontWeight = FontWeight.Medium
             )
         }
     }
 }
 
-/**
- * Assistant message bubble with code block rendering, text copy, and voice reading.
- */
 @Composable
-private fun AssistantMessageBubble(
+private fun MessageBubbleRow(
     message: ConversationalMessage,
-    onCopy: () -> Unit,
-    onRead: () -> Unit
+    onSpeakClick: () -> Unit
 ) {
-    val context = LocalContext.current
-    val contentBlocks = remember(message.text) {
-        parseMarkdownContent(message.text)
-    }
-
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalAlignment = if (message.isUser) Alignment.End else Alignment.Start
     ) {
-        contentBlocks.forEach { block ->
-            when (block) {
-                is ContentBlock.Text -> {
-                    MarkdownText(text = block.content, isStreaming = message.isStreaming)
-                }
-                is ContentBlock.Code -> {
-                    CodeSnippetCard(
-                        language = block.language,
-                        code = block.code,
-                        onCopy = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Code", block.code))
-                            Toast.makeText(context, "Code copied", Toast.LENGTH_SHORT).show()
-                        }
-                    )
-                }
-            }
-        }
-
-        // Action Toolbar: Copy & Read aloud
-        if (!message.isStreaming && message.text.isNotBlank()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    IconButton(onClick = onCopy, modifier = Modifier.size(28.dp)) {
-                        Icon(
-                            imageVector = Icons.Outlined.ContentCopy,
-                            contentDescription = "Copy",
-                            tint = Color(0xFF94A3B8),
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
-                    IconButton(onClick = onRead, modifier = Modifier.size(28.dp)) {
-                        Icon(
-                            imageVector = Icons.Outlined.VolumeUp,
-                            contentDescription = "Read Aloud",
-                            tint = Color(0xFF94A3B8),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-
+        Surface(
+            shape = RoundedCornerShape(
+                topStart = 18.dp,
+                topEnd = 18.dp,
+                bottomStart = if (message.isUser) 18.dp else 4.dp,
+                bottomEnd = if (message.isUser) 4.dp else 18.dp
+            ),
+            color = if (message.isUser) Color(0xFF262626) else Color(0xFF171717),
+            modifier = Modifier.widthIn(max = 320.dp)
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
                 Text(
-                    text = "Offline Sauti Agent",
-                    color = Color(0xFF475569),
-                    fontSize = 11.sp
+                    text = message.text,
+                    color = TextWhite,
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp
                 )
-            }
-        }
-    }
-}
 
-/**
- * Modern High-Precision Code Block Card.
- */
-@Composable
-fun CodeSnippetCard(
-    language: String,
-    code: String,
-    onCopy: () -> Unit
-) {
-    val scrollState = rememberScrollState()
-    var isCopied by remember { mutableStateOf(false) }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF0F131A))
-            .border(1.dp, Color(0xFF222838), RoundedCornerShape(10.dp))
-    ) {
-        Column {
-            // Header Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF171B24))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Code,
-                        contentDescription = "Code",
-                        tint = Color(0xFF38BDF8),
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Text(
-                        text = language,
-                        color = Color(0xFF94A3B8),
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-
-                TextButton(
-                    onClick = {
-                        onCopy()
-                        isCopied = true
-                    },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isCopied) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
-                        contentDescription = "Copy Code",
-                        tint = if (isCopied) Color(0xFF10B981) else Color(0xFF94A3B8),
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = if (isCopied) "Copied" else "Copy",
-                        color = if (isCopied) Color(0xFF10B981) else Color(0xFF94A3B8),
-                        fontSize = 11.sp
-                    )
-                }
-            }
-
-            // Code Content with Horizontal Scroll
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(scrollState)
-                    .padding(14.dp)
-            ) {
-                Text(
-                    text = code,
-                    color = Color(0xFFE2E8F0),
-                    fontSize = 12.5.sp,
-                    fontFamily = FontFamily.Monospace,
-                    lineHeight = 19.sp
-                )
-            }
-        }
-    }
-}
-
-/**
- * Strips formatting for system clipboard or TTS speech synthesis.
- */
-private fun cleanMarkdownForClipboard(raw: String): String {
-    return raw
-        .replace(Regex("^###\\s+", RegexOption.MULTILINE), "")
-        .replace(Regex("^####\\s+", RegexOption.MULTILINE), "")
-        .replace(Regex("```[a-zA-Z]*\\n", RegexOption.MULTILINE), "")
-        .replace("```", "")
-        .replace("**", "")
-        .replace("*", "")
-        .trim()
-}
-
-/**
- * Clean markdown renderer for regular text, headings, and bullet points.
- */
-@Composable
-private fun MarkdownText(
-    text: String,
-    isStreaming: Boolean = false
-) {
-    val lines = text.split("\n")
-
-    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        lines.forEachIndexed { index, line ->
-            val isLastLine = index == lines.lastIndex
-            when {
-                line.startsWith("### ") -> {
-                    Text(
-                        text = line.removePrefix("### "),
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        lineHeight = 22.sp
-                    )
-                }
-                line.startsWith("#### ") -> {
-                    Text(
-                        text = line.removePrefix("#### "),
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        lineHeight = 20.sp
-                    )
-                }
-                line.startsWith("- ") || line.startsWith("* ") -> {
+                if (!message.isUser && message.text.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
                     Row(
-                        modifier = Modifier.padding(start = 4.dp, top = 2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.Top
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "•",
-                            color = Color(0xFF38BDF8),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        val content = line.substring(2)
-                        val annotated = parseInlineMarkdown(content)
-                        Text(
-                            text = annotated,
-                            color = Color(0xFFF1F5F9),
-                            fontSize = 13.sp,
-                            lineHeight = 20.sp
-                        )
-                    }
-                }
-                line.isBlank() -> {
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-                else -> {
-                    val annotated = parseInlineMarkdown(line)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = annotated,
-                            color = Color(0xFFF1F5F9),
-                            fontSize = 13.sp,
-                            lineHeight = 21.sp
-                        )
-                        if (isStreaming && isLastLine) {
-                            StreamingCursor()
+                        if (message.tokensPerSec.isNotBlank()) {
+                            Text(
+                                text = message.tokensPerSec,
+                                color = TextMuted,
+                                fontSize = 11.sp
+                            )
+                        } else {
+                            Spacer(modifier = Modifier.width(1.dp))
+                        }
+
+                        IconButton(
+                            onClick = onSpeakClick,
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.VolumeUp,
+                                contentDescription = "Read aloud",
+                                tint = TextMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
                         }
                     }
                 }
             }
         }
-
-        if (isStreaming && lines.isEmpty()) {
-            StreamingCursor()
-        }
-    }
-}
-
-private fun parseInlineMarkdown(raw: String) = buildAnnotatedString {
-    var cursor = 0
-    while (cursor < raw.length) {
-        val boldStart = raw.indexOf("**", cursor)
-        if (boldStart == -1) {
-            append(raw.substring(cursor))
-            break
-        }
-        append(raw.substring(cursor, boldStart))
-        val boldEnd = raw.indexOf("**", boldStart + 2)
-        if (boldEnd == -1) {
-            append(raw.substring(boldStart))
-            break
-        }
-        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Color.White)) {
-            append(raw.substring(boldStart + 2, boldEnd))
-        }
-        cursor = boldEnd + 2
-    }
-}
-
-@Composable
-private fun StreamingCursor() {
-    var isVisible by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(400)
-            isVisible = !isVisible
-        }
-    }
-
-    AnimatedVisibility(
-        visible = isVisible,
-        enter = fadeIn(),
-        exit = fadeOut()
-    ) {
-        Box(
-            modifier = Modifier
-                .padding(start = 2.dp)
-                .width(6.dp)
-                .height(13.dp)
-                .clip(RoundedCornerShape(1.dp))
-                .background(Color(0xFF38BDF8))
-        )
     }
 }

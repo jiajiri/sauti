@@ -26,14 +26,16 @@ import java.util.Locale
 import java.util.UUID
 
 /**
- * 5 distinct workspace structural states.
+ * Structural workspace and sub-screen states matching reference layouts.
  */
 enum class SautiWorkspace {
     CHAT_WORKSPACE,
     AUDIO_WORKSPACE,
     LIBRARY_WORKSPACE,
     NOTEBOOKS_WORKSPACE,
-    SETTINGS_WORKSPACE
+    SETTINGS_WORKSPACE,
+    VOICE_SETTINGS_WORKSPACE,
+    ABOUT_WORKSPACE
 }
 
 /**
