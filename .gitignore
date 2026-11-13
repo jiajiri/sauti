@@ -24,6 +24,7 @@ build/
 models_store/
 benchmarks/audio_test/
 encrypted_models_cdn/
+developer_r2_readonly.env
 
 # Allow GBNF grammars inside models/
 !models/grammars/
