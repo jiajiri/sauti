@@ -201,7 +201,7 @@ object SautiEngineLoader {
     fun generateStreamingResponse(userPrompt: String): Flow<String> = kotlinx.coroutines.flow.callbackFlow {
         val clean = userPrompt.trim()
         val intent = com.sauti.app.rag.IntentClassifier.classify(clean)
-        val detectedLang = com.sauti.app.rag.LanguageDetector.detect(clean)
+        val decision = com.sauti.app.rag.LanguageDetector.analyze(clean)
 
         // Retrieve local domain context whenever available from Sovereign Knowledge Store
         val retrievedContext = if (knowledgeDatabase != null) {
@@ -211,10 +211,21 @@ object SautiEngineLoader {
             } else ""
         } else ""
 
-        val systemLanguageInstruction = if (detectedLang == com.sauti.app.rag.DetectedLanguage.SWAHILI) {
-            "Wewe ni Sauti AI, msaidizi mwerevu na mwaminifu unayeongea Kiswahili fasaha cha Tanzania na Kiingereza. Jibu maswali kwa ufupi, kwa usahihi, na bila kubuni taarifa usizozijua. Kama huna uhakika au hujui jibu, sema bayana: 'Samahani, sina taarifa hiyo kwa sasa.' Toa majibu ya moja kwa moja."
-        } else {
-            "You are Sauti AI, an intelligent, factual bilingual assistant. Answer concisely and accurately. If you are uncertain or do not know the answer, explicitly state: 'I do not have enough verified information on that.' Never fabricate or hallucinate facts."
+        val systemLanguageInstruction = when (decision.language) {
+            com.sauti.app.rag.DetectedLanguage.SWAHILI -> {
+                if (decision.isCodeSwitching) {
+                    "Wewe ni Sauti AI, msaidizi mwerevu unayeongea Kiswahili fasaha na kuelewa Kiingereza. Mtumiaji ametumia mchanganyiko wa lugha, lakini jibu kwa Kiswahili fasaha cha Tanzania ukieleza vizuri masuala ya kiufundi bila kubuni taarifa."
+                } else {
+                    "Wewe ni Sauti AI, msaidizi mwerevu na mwaminifu unayeongea Kiswahili fasaha cha Tanzania. Jibu maswali kwa ufupi, kwa usahihi, na bila kubuni taarifa usizozijua. Kama huna uhakika au hujui jibu, sema bayana: 'Samahani, sina taarifa hiyo kwa sasa.' Toa majibu ya moja kwa moja."
+                }
+            }
+            com.sauti.app.rag.DetectedLanguage.ENGLISH -> {
+                if (decision.isCodeSwitching) {
+                    "You are Sauti AI, an intelligent bilingual assistant. The user mixed English with Swahili words; reply in fluent, clear English while fully respecting the technical terms used. Never fabricate facts."
+                } else {
+                    "You are Sauti AI, an intelligent, factual bilingual assistant. Answer concisely and accurately in English. If you are uncertain or do not know the answer, explicitly state: 'I do not have enough verified information on that.' Never fabricate or hallucinate facts."
+                }
+            }
         }
 
         val formattedPrompt = buildString {
