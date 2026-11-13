@@ -28,6 +28,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
+import com.airbnb.android.showkase.annotation.ShowkaseComposable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sauti.app.tts.TextToSpeechEngine
@@ -529,7 +531,7 @@ private fun AutoScrollingChipRow(
 }
 
 @Composable
-private fun MessageBubbleRow(
+internal fun MessageBubbleRow(
     message: ConversationalMessage,
     onSpeakClick: () -> Unit
 ) {
@@ -589,3 +591,33 @@ private fun MessageBubbleRow(
         }
     }
 }
+
+@ShowkaseComposable(name = "UserBubble", group = "ChatBubbles")
+@Preview(showBackground = true, backgroundColor = 0xFF000000)
+@Composable
+fun PreviewUserBubble() {
+    MessageBubbleRow(
+        message = ConversationalMessage(
+            id = "preview_1",
+            isUser = true,
+            text = "Habari za asubuhi! Naomba unisaidie kueleza CAP Theorem kwa Kiswahili."
+        ),
+        onSpeakClick = {}
+    )
+}
+
+@ShowkaseComposable(name = "AssistantBubble", group = "ChatBubbles")
+@Preview(showBackground = true, backgroundColor = 0xFF000000)
+@Composable
+fun PreviewAssistantBubble() {
+    MessageBubbleRow(
+        message = ConversationalMessage(
+            id = "preview_2",
+            isUser = false,
+            text = "Nadharia ya CAP (Consistency, Availability, Partition tolerance) inasema mfumo wa kompyuta hauwezi kutoa vyote vitatu kwa pamoja.",
+            tokensPerSec = "24.5 t/s"
+        ),
+        onSpeakClick = {}
+    )
+}
+

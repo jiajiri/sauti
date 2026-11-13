@@ -148,41 +148,42 @@ def main():
     custom_domain = os.getenv("CLOUDFLARE_R2_CUSTOM_DOMAIN", "https://cdn.sauti.ai").rstrip("/")
     bucket_name = os.getenv("CLOUDFLARE_R2_BUCKET_NAME", "sauti-models")
 
+    # Dynamically build model definitions from environment variables (Zero hardcoded model strings)
     model_mappings = [
         {
-            "id": "core_pro",
-            "name": "CraneAILabs/swahili-gemma-1b-GGUF",
-            "source": os.path.join(MODELS_DIR, "swahili-gemma-1b-q4_k_m.gguf"),
-            "target": "swahili-gemma-1b-q4_k_m.gguf.enc",
-            "output_filename": "core_pro.bin",
-            "required": True,
+            "id": os.getenv("MODEL_VOICE_SW_ID", "voice_sw"),
+            "name": os.getenv("MODEL_VOICE_SW_NAME", "JTulel/whisper-swahili-small-q4_1"),
+            "source": os.getenv("MODEL_VOICE_SW_SOURCE", os.path.join(MODELS_DIR, "whisper-swahili-small-q4_1.bin")),
+            "target": os.getenv("MODEL_VOICE_SW_TARGET", "whisper-swahili-small-q4_1.bin.enc"),
+            "output_filename": os.getenv("MODEL_VOICE_SW_FILENAME", "voice_lite.bin"),
+            "required": os.getenv("MODEL_VOICE_SW_REQUIRED", "true").lower() == "true",
             "version": args.version
         },
         {
-            "id": "core_lite",
-            "name": "Qwen2.5-0.5B-Chat-Q4_0",
-            "source": os.path.join(MODELS_DIR, "qwen2.5-0.5b-chat-q4_0.gguf"),
-            "target": "core_lite.bin.enc",
-            "output_filename": "core_lite.bin",
-            "required": False,
+            "id": os.getenv("MODEL_VOICE_EN_ID", "voice_en"),
+            "name": os.getenv("MODEL_VOICE_EN_NAME", "Whisper-Base.en-Q5_1"),
+            "source": os.getenv("MODEL_VOICE_EN_SOURCE", os.path.join(MODELS_DIR, "ggml-base.en-q5_1.bin")),
+            "target": os.getenv("MODEL_VOICE_EN_TARGET", "ggml-base.en-q5_1.bin.enc"),
+            "output_filename": os.getenv("MODEL_VOICE_EN_FILENAME", "voice_en.bin"),
+            "required": os.getenv("MODEL_VOICE_EN_REQUIRED", "false").lower() == "true",
             "version": args.version
         },
         {
-            "id": "voice_sw",
-            "name": "JTulel/whisper-swahili-small-q4_1 (Tanzanian Swahili Fine-Tuned)",
-            "source": os.path.join(MODELS_DIR, "whisper-swahili-small-q4_1.bin"),
-            "target": "whisper-swahili-small-q4_1.bin.enc",
-            "output_filename": "voice_lite.bin",
-            "required": True,
+            "id": os.getenv("MODEL_CORE_PRO_ID", "core_pro"),
+            "name": os.getenv("MODEL_CORE_PRO_NAME", "CraneAILabs/swahili-gemma-1b-GGUF"),
+            "source": os.getenv("MODEL_CORE_PRO_SOURCE", os.path.join(MODELS_DIR, "swahili-gemma-1b-q4_k_m.gguf")),
+            "target": os.getenv("MODEL_CORE_PRO_TARGET", "swahili-gemma-1b-q4_k_m.gguf.enc"),
+            "output_filename": os.getenv("MODEL_CORE_PRO_FILENAME", "core_pro.bin"),
+            "required": os.getenv("MODEL_CORE_PRO_REQUIRED", "true").lower() == "true",
             "version": args.version
         },
         {
-            "id": "voice_en",
-            "name": "Whisper-Base.en-Q5_1 (English Pure Voice Companion)",
-            "source": os.path.join(MODELS_DIR, "ggml-base.en-q5_1.bin"),
-            "target": "ggml-base.en-q5_1.bin.enc",
-            "output_filename": "voice_en.bin",
-            "required": False,
+            "id": os.getenv("MODEL_CORE_ULTRA_ID", "core_ultra"),
+            "name": os.getenv("MODEL_CORE_ULTRA_NAME", "CraneAILabs/swahili-gemma-4b-GGUF"),
+            "source": os.getenv("MODEL_CORE_ULTRA_SOURCE", os.path.join(MODELS_DIR, "swahili-gemma-4b-q4_k_m.gguf")),
+            "target": os.getenv("MODEL_CORE_ULTRA_TARGET", "swahili-gemma-4b-q4_k_m.gguf.enc"),
+            "output_filename": os.getenv("MODEL_CORE_ULTRA_FILENAME", "core_ultra.bin"),
+            "required": os.getenv("MODEL_CORE_ULTRA_REQUIRED", "false").lower() == "true",
             "version": args.version
         }
     ]

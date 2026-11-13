@@ -28,7 +28,7 @@ class ModelDownloadWorker(
 
     companion object {
         const val WORK_NAME = "sauti_model_sync_work"
-        private const val MANIFEST_URL = "https://cdn.sauti.ai/models/latest/manifest.json"
+        private const val MANIFEST_URL = com.sauti.app.SautiConfig.MODEL_MANIFEST_URL
 
         fun schedule(context: Context) {
             val constraints = Constraints.Builder()
