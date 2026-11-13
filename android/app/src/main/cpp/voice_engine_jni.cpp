@@ -27,6 +27,15 @@ static std::string g_sauti_core_path;
 static bool g_sauti_voice_initialized = false;
 static bool g_sauti_core_initialized = false;
 
+// Runtime-configurable inference parameters (safe defaults match original hardcoded values)
+static struct {
+    float temperature    = 0.7f;
+    int   top_k          = 40;
+    float top_p          = 0.90f;
+    float repeat_penalty = 1.25f;
+    int   max_tokens     = 512;
+} g_inf_params;
+
 // Global lock-free ring buffer for 16kHz audio samples
 static sauti::dsa::SpscRingBuffer<int16_t, 65536> g_audio_ring_buffer;
 
@@ -299,23 +308,22 @@ Java_com_sauti_app_sauti_SautiEngineLoader_nativeGenerateChatCompletion(
         current_pos += n_eval;
     }
 
-    // Production LLMOps Sampling Pipeline:
-    // 1. Penalties sampler: penalizes repeated n-grams to kill degeneration loops (e.g. Stateflow.process() loops)
-    //    penalty_last_n=64 tokens, repeat_penalty=1.20f, freq_penalty=0.40f, presence_penalty=0.20f
-    // 2. Top-K filtering (k=40)
-    // 3. Top-P nucleus filtering (p=0.90)
+    // Production LLMOps Sampling Pipeline (uses runtime-configurable g_inf_params):
+    // 1. Penalties sampler: penalizes repeated n-grams using g_inf_params.repeat_penalty
+    // 2. Top-K filtering using g_inf_params.top_k
+    // 3. Top-P nucleus filtering using g_inf_params.top_p
     // 4. Min-P filtering (p=0.05) to eliminate long-tail hallucination tokens
-    // 5. Temperature scaling (temp=0.7)
+    // 5. Temperature scaling using g_inf_params.temperature
     // 6. Distribution sampler with stable seed for token selection
     auto sparams = llama_sampler_chain_default_params();
     llama_sampler* smpl = llama_sampler_chain_init(sparams);
 
     const int32_t n_vocab = llama_vocab_n_tokens(vocab);
-    llama_sampler_chain_add(smpl, llama_sampler_init_penalties(n_vocab, 64, 1.25f, 0.50f, 0.30f));
-    llama_sampler_chain_add(smpl, llama_sampler_init_top_k(40));
-    llama_sampler_chain_add(smpl, llama_sampler_init_top_p(0.90f, 1));
+    llama_sampler_chain_add(smpl, llama_sampler_init_penalties(n_vocab, 64, g_inf_params.repeat_penalty, 0.50f, 0.30f));
+    llama_sampler_chain_add(smpl, llama_sampler_init_top_k(g_inf_params.top_k));
+    llama_sampler_chain_add(smpl, llama_sampler_init_top_p(g_inf_params.top_p, 1));
     llama_sampler_chain_add(smpl, llama_sampler_init_min_p(0.05f, 1));
-    llama_sampler_chain_add(smpl, llama_sampler_init_temp(0.7f));
+    llama_sampler_chain_add(smpl, llama_sampler_init_temp(g_inf_params.temperature));
     llama_sampler_chain_add(smpl, llama_sampler_init_dist(42));
 
     // CRITICAL: Feed all prompt tokens into the sampler chain so penalty/repetition tracking works on full context!
@@ -323,8 +331,8 @@ Java_com_sauti_app_sauti_SautiEngineLoader_nativeGenerateChatCompletion(
         llama_sampler_accept(smpl, prompt_tokens[i]);
     }
 
-    // Generate up to 512 tokens (enough for full function code blocks)
-    for (int iter = 0; iter < 512; ++iter) {
+    // Generate up to g_inf_params.max_tokens (runtime-configurable via Settings)
+    for (int iter = 0; iter < g_inf_params.max_tokens; ++iter) {
         llama_token new_token_id = llama_sampler_sample(smpl, g_llama_context, -1);
         llama_sampler_accept(smpl, new_token_id);
 
@@ -368,4 +376,52 @@ Java_com_sauti_app_SautiInputMethodService_nativeNotifyMemoryPressure(
     jobject /* this */,
     jboolean isCritical) {
     sauti::memory::MemoryArenaManager::instance().onMemoryTrim(static_cast<bool>(isCritical));
+}
+
+// ─── Settings: Runtime Inference Parameter Override ───────────────────────────
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_sauti_app_sauti_SautiEngineLoader_nativeSetInferenceParams(
+    JNIEnv* /* env */, jobject /* this */,
+    jfloat temp, jint topK, jfloat topP, jfloat repPen, jint maxTok
+) {
+    g_inf_params.temperature    = temp;
+    g_inf_params.top_k          = topK;
+    g_inf_params.top_p          = topP;
+    g_inf_params.repeat_penalty = repPen;
+    g_inf_params.max_tokens     = maxTok;
+    LOGI("Inference params updated: temp=%.2f topK=%d topP=%.2f repPen=%.2f maxTok=%d",
+         temp, topK, topP, repPen, maxTok);
+}
+
+// ─── Settings: Hot-Swap Core GGUF Model ──────────────────────────────────────
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_sauti_app_sauti_SautiEngineLoader_nativeSwitchCoreModel(
+    JNIEnv* env, jobject /* this */, jstring jPath
+) {
+    if (!jPath) return JNI_FALSE;
+    const char* cpath = env->GetStringUTFChars(jPath, nullptr);
+    if (!cpath) return JNI_FALSE;
+
+    std::lock_guard<std::mutex> lock(g_engine_mutex);
+
+    // Release existing context & model
+    if (g_llama_context) {
+        llama_free(g_llama_context);
+        g_llama_context = nullptr;
+    }
+    if (g_llama_model) {
+        llama_model_free(g_llama_model);
+        g_llama_model = nullptr;
+    }
+
+    g_sauti_core_path = std::string(cpath);
+    env->ReleaseStringUTFChars(jPath, cpath);
+    g_sauti_core_initialized = false;
+
+    LOGI("Switching core model to: %s", g_sauti_core_path.c_str());
+    ensureLlamaModelLoaded();
+    g_sauti_core_initialized = (g_llama_model != nullptr && g_llama_context != nullptr);
+    return g_sauti_core_initialized ? JNI_TRUE : JNI_FALSE;
 }

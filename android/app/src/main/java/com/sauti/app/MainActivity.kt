@@ -38,6 +38,7 @@ import com.sauti.app.data.model.UserProfile
 import com.sauti.app.power.PowerHardwareManager
 import com.sauti.app.tts.TextToSpeechEngine
 import com.sauti.app.ui.screens.ChatScreen
+import com.sauti.app.ui.screens.SettingsScreen
 import com.sauti.app.ui.screens.VoiceModeScreen
 import com.sauti.app.ui.theme.SautiTheme
 import com.sauti.app.viewmodel.SautiNavigationViewModel
@@ -103,7 +104,7 @@ class MainActivity : ComponentActivity() {
                     }
                 )
 
-                SautiMainApp(viewModel = viewModel)
+                SautiMainApp(viewModel = viewModel, ttsEngine = ttsEngine)
             }
         }
     }
@@ -125,7 +126,8 @@ class MainActivity : ComponentActivity() {
  */
 @Composable
 fun SautiMainApp(
-    viewModel: SautiNavigationViewModel
+    viewModel: SautiNavigationViewModel,
+    ttsEngine: TextToSpeechEngine?
 ) {
     val currentWorkspace by viewModel.currentWorkspace.collectAsState()
     val userProfile by viewModel.userProfile.collectAsState()
@@ -250,6 +252,14 @@ fun SautiMainApp(
                             isSelected = currentWorkspace == SautiWorkspace.NOTEBOOKS_WORKSPACE,
                             onClick = { viewModel.selectWorkspace(SautiWorkspace.NOTEBOOKS_WORKSPACE); coroutineScope.launch { drawerState.close() } }
                         )
+
+                        // SETTINGS_WORKSPACE
+                        SidebarModuleRow(
+                            icon = Icons.Outlined.Settings,
+                            label = "Settings",
+                            isSelected = currentWorkspace == SautiWorkspace.SETTINGS_WORKSPACE,
+                            onClick = { viewModel.selectWorkspace(SautiWorkspace.SETTINGS_WORKSPACE); coroutineScope.launch { drawerState.close() } }
+                        )
                     }
 
                     Divider(
@@ -319,14 +329,21 @@ fun SautiMainApp(
                                         modifier = Modifier.padding(horizontal = 12.dp),
                                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
-                                        Text(
-                                            text = session.title,
-                                            color = if (isCurrent) Color.White else Color(0xFFCBD5E1),
-                                            fontSize = 14.sp,
-                                            fontWeight = if (isCurrent) FontWeight.Medium else FontWeight.Normal,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = session.title,
+                                                color = if (isCurrent) Color.White else Color(0xFFCBD5E1),
+                                                fontSize = 14.sp,
+                                                fontWeight = if (isCurrent) FontWeight.Medium else FontWeight.Normal,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = formatSessionTimestamp(session.timestamp),
+                                                color = Color(0xFF475569),
+                                                fontSize = 11.sp
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -343,8 +360,8 @@ fun SautiMainApp(
                     UserProfileFooter(
                         profile = userProfile,
                         onSettingsClick = {
-                            // Parameter 4: Smoothly route viewport layout to LIBRARY_WORKSPACE subscreen
-                            viewModel.selectWorkspace(SautiWorkspace.LIBRARY_WORKSPACE); coroutineScope.launch { drawerState.close() }
+                            // Route to Settings workspace
+                            viewModel.selectWorkspace(SautiWorkspace.SETTINGS_WORKSPACE); coroutineScope.launch { drawerState.close() }
                         }
                     )
                 }
@@ -360,7 +377,8 @@ fun SautiMainApp(
                 SautiWorkspace.CHAT_WORKSPACE -> {
                     ChatScreen(
                         onVoiceClick = { viewModel.selectWorkspace(SautiWorkspace.AUDIO_WORKSPACE) },
-                        onDrawerClick = { coroutineScope.launch { drawerState.open() } }
+                        onDrawerClick = { coroutineScope.launch { drawerState.open() } },
+                        viewModel = viewModel
                     )
                 }
                 SautiWorkspace.AUDIO_WORKSPACE -> {
@@ -385,6 +403,16 @@ fun SautiMainApp(
                         subtitle = "Long-form context workspaces & Swahili document synthesizer",
                         icon = Icons.Outlined.Folder,
                         onReturnToChat = { viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE) }
+                    )
+                }
+                SautiWorkspace.SETTINGS_WORKSPACE -> {
+                    SettingsScreen(
+                        ttsEngine = ttsEngine,
+                        onBack = { viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE) },
+                        onClearAllHistory = {
+                            viewModel.clearAllHistory()
+                            viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE)
+                        }
                     )
                 }
             }
@@ -563,6 +591,26 @@ private fun WorkspacePlaceholderView(
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
         ) {
             Text("Return to Sauti Chat")
+        }
+    }
+}
+
+private fun formatSessionTimestamp(timestamp: Long): String {
+    val diff = System.currentTimeMillis() - timestamp
+    val seconds = diff / 1000
+    val minutes = seconds / 60
+    val hours = minutes / 60
+    val days = hours / 24
+
+    return when {
+        minutes < 1 -> "Just now"
+        minutes < 60 -> "${minutes}m ago"
+        hours < 24 -> "${hours}h ago"
+        days == 1L -> "Yesterday"
+        days < 7 -> "${days}d ago"
+        else -> {
+            val sdf = java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault())
+            sdf.format(java.util.Date(timestamp))
         }
     }
 }

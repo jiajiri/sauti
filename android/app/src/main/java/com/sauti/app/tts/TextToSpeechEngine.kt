@@ -176,4 +176,13 @@ class TextToSpeechEngine(
         tts = null
         isReady.set(false)
     }
+
+    /**
+     * Previews a fixed sample sentence using the given voice persona.
+     * Used by the Settings screen Preview button.
+     */
+    fun previewSpeak(persona: VoicePersona) {
+        setVoicePersona(persona)
+        speak("Hello! I am Sauti AI, your intelligent on-device assistant. How can I help you today?")
+    }
 }

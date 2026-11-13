@@ -34,6 +34,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -135,33 +136,43 @@ fun generateStreamingTokens(prompt: String): Flow<String> {
 @Composable
 fun ChatScreen(
     onVoiceClick: () -> Unit = {},
-    onDrawerClick: () -> Unit = {}
+    onDrawerClick: () -> Unit = {},
+    viewModel: com.sauti.app.viewmodel.SautiNavigationViewModel? = null
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val ttsEngine = remember { TextToSpeechEngine(context) }
 
-    // Session list container
-    val sessions = remember {
-        mutableStateListOf(
-            ChatSession(
-                id = "session_default",
-                title = "New Topic",
-                messages = androidx.compose.runtime.mutableStateListOf()
-            )
-        )
-    }
+    val activeSessionId by viewModel?.activeSessionId?.collectAsState() ?: remember { mutableStateOf(null) }
+    val activeSessionTitle by viewModel?.activeSessionTitle?.collectAsState() ?: remember { mutableStateOf("New Chat") }
+    val persistedMessages by viewModel?.activeMessages?.collectAsState() ?: remember { mutableStateOf(emptyList<com.sauti.app.data.local.ChatMessage>()) }
 
-    var activeSessionId by remember { mutableStateOf(sessions.first().id) }
+    // Transient streaming state for currently generating message
+    var streamingMessage by remember { mutableStateOf<ConversationalMessage?>(null) }
     var inputMessage by remember { mutableStateOf("") }
     var isGenerating by remember { mutableStateOf(false) }
 
-    val activeSession = sessions.firstOrNull { it.id == activeSessionId } ?: sessions.first()
-    val activeMessages = activeSession.messages
+    // Combined messages: database-persisted messages + active streaming placeholder
+    val displayMessages = remember(persistedMessages, streamingMessage) {
+        val list = persistedMessages.map { dbMsg ->
+            ConversationalMessage(
+                id = dbMsg.id,
+                isUser = dbMsg.isUser,
+                text = dbMsg.text,
+                tokensPerSec = dbMsg.tokensPerSec,
+                isStreaming = false
+            )
+        }.toMutableList()
 
-    val lastItemIndex = activeMessages.lastIndex
-    val lastMessageContentLength = activeMessages.lastOrNull()?.text?.length ?: 0
+        if (streamingMessage != null) {
+            list.add(streamingMessage!!)
+        }
+        list
+    }
+
+    val lastItemIndex = displayMessages.lastIndex
+    val lastMessageContentLength = displayMessages.lastOrNull()?.text?.length ?: 0
 
     LaunchedEffect(lastItemIndex, lastMessageContentLength) {
         if (lastItemIndex >= 0) {
@@ -170,7 +181,7 @@ fun ChatScreen(
             } ?: true
 
             if (isNearBottom) {
-                if (activeMessages.lastOrNull()?.isStreaming == true && lastMessageContentLength > 20) {
+                if (displayMessages.lastOrNull()?.isStreaming == true && lastMessageContentLength > 20) {
                     listState.scrollToItem(lastItemIndex)
                 } else {
                     listState.animateScrollToItem(lastItemIndex)
@@ -187,7 +198,7 @@ fun ChatScreen(
             .imePadding(),
         containerColor = Color.Black,
         topBar = {
-            // Clean Top Bar
+            // Dynamic Top Bar: shows current active session title
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -208,25 +219,19 @@ fun ChatScreen(
                 }
 
                 Text(
-                    text = "Sauti",
+                    text = activeSessionTitle,
                     color = Color(0xFFE2E8F0),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.2.sp
+                    letterSpacing = 0.2.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                 )
 
                 IconButton(
                     onClick = {
-                        val newSessionId = "session_${System.currentTimeMillis()}"
-                        sessions.add(
-                            0,
-                            ChatSession(
-                                id = newSessionId,
-                                title = "New Topic",
-                                messages = mutableStateListOf()
-                            )
-                        )
-                        activeSessionId = newSessionId
+                        viewModel?.createNewSession()
                     },
                     modifier = Modifier.size(36.dp)
                 ) {
@@ -280,22 +285,18 @@ fun ChatScreen(
                                         val userPrompt = inputMessage.trim()
                                         inputMessage = ""
 
-                                        val userMsg = ConversationalMessage(
-                                            id = System.currentTimeMillis().toString(),
-                                            isUser = true,
-                                            text = userPrompt
-                                        )
-                                        activeSession.messages.add(userMsg)
+                                        val currentSId = activeSessionId ?: "default"
+                                        viewModel?.updateSessionTitleIfDefault(currentSId, userPrompt)
+                                        viewModel?.saveMessage(currentSId, isUser = true, text = userPrompt)
 
                                         val assistantMsgId = (System.currentTimeMillis() + 1).toString()
-                                        val assistantPlaceholder = ConversationalMessage(
+                                        streamingMessage = ConversationalMessage(
                                             id = assistantMsgId,
                                             isUser = false,
                                             text = "",
                                             tokensPerSec = "0.0 t/s",
                                             isStreaming = true
                                         )
-                                        activeSession.messages.add(assistantPlaceholder)
                                         isGenerating = true
 
                                         coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -310,27 +311,23 @@ fun ChatScreen(
                                                 val currentTps = String.format(Locale.US, "%.1f t/s", (tokenCount / elapsedSec))
 
                                                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                                    val index = activeSession.messages.indexOfFirst { it.id == assistantMsgId }
-                                                    if (index != -1) {
-                                                        activeSession.messages[index] = activeSession.messages[index].copy(
-                                                            text = accumulated.toString(),
-                                                            tokensPerSec = currentTps,
-                                                            isStreaming = true
-                                                        )
-                                                    }
+                                                    streamingMessage = streamingMessage?.copy(
+                                                        text = accumulated.toString(),
+                                                        tokensPerSec = currentTps,
+                                                        isStreaming = true
+                                                    )
                                                 }
                                             }
 
                                             val finalElapsedSec = ((System.currentTimeMillis() - startTime).coerceAtLeast(1L)) / 1000.0
                                             val finalTps = String.format(Locale.US, "%.1f t/s", (tokenCount / finalElapsedSec))
+                                            val finalResponse = accumulated.toString()
+
+                                            // Persist completed assistant message to SQLite
+                                            viewModel?.saveMessage(currentSId, isUser = false, text = finalResponse, tokensPerSec = finalTps)
+
                                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                                val finalIndex = activeSession.messages.indexOfFirst { it.id == assistantMsgId }
-                                                if (finalIndex != -1) {
-                                                    activeSession.messages[finalIndex] = activeSession.messages[finalIndex].copy(
-                                                        tokensPerSec = finalTps,
-                                                        isStreaming = false
-                                                    )
-                                                }
+                                                streamingMessage = null
                                                 isGenerating = false
                                             }
                                         }
@@ -376,45 +373,50 @@ fun ChatScreen(
                                         val userPrompt = inputMessage.trim()
                                         inputMessage = ""
 
-                                        val userMsg = ConversationalMessage(
-                                            id = System.currentTimeMillis().toString(),
-                                            isUser = true,
-                                            text = userPrompt
-                                        )
-                                        activeSession.messages.add(userMsg)
+                                        val currentSId = activeSessionId ?: "default"
+                                        viewModel?.updateSessionTitleIfDefault(currentSId, userPrompt)
+                                        viewModel?.saveMessage(currentSId, isUser = true, text = userPrompt)
 
                                         val assistantMsgId = (System.currentTimeMillis() + 1).toString()
-                                        val assistantPlaceholder = ConversationalMessage(
+                                        streamingMessage = ConversationalMessage(
                                             id = assistantMsgId,
                                             isUser = false,
                                             text = "",
+                                            tokensPerSec = "0.0 t/s",
                                             isStreaming = true
                                         )
-                                        activeSession.messages.add(assistantPlaceholder)
                                         isGenerating = true
 
-                                        coroutineScope.launch {
+                                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                            val startTime = System.currentTimeMillis()
+                                            var tokenCount = 0
                                             val accumulated = StringBuilder()
 
                                             generateStreamingTokens(userPrompt).collect { token ->
                                                 accumulated.append(token)
-                                                val index = activeSession.messages.indexOfFirst { it.id == assistantMsgId }
-                                                if (index != -1) {
-                                                    activeSession.messages[index] = activeSession.messages[index].copy(
+                                                tokenCount++
+                                                val elapsedSec = ((System.currentTimeMillis() - startTime).coerceAtLeast(1L)) / 1000.0
+                                                val currentTps = String.format(Locale.US, "%.1f t/s", (tokenCount / elapsedSec))
+
+                                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                    streamingMessage = streamingMessage?.copy(
                                                         text = accumulated.toString(),
+                                                        tokensPerSec = currentTps,
                                                         isStreaming = true
                                                     )
                                                 }
                                             }
 
-                                            val finalIndex = activeSession.messages.indexOfFirst { it.id == assistantMsgId }
-                                            if (finalIndex != -1) {
-                                                activeSession.messages[finalIndex] = activeSession.messages[finalIndex].copy(
-                                                    text = accumulated.toString(),
-                                                    isStreaming = false
-                                                )
+                                            val finalElapsedSec = ((System.currentTimeMillis() - startTime).coerceAtLeast(1L)) / 1000.0
+                                            val finalTps = String.format(Locale.US, "%.1f t/s", (tokenCount / finalElapsedSec))
+                                            val finalResponse = accumulated.toString()
+
+                                            viewModel?.saveMessage(currentSId, isUser = false, text = finalResponse, tokensPerSec = finalTps)
+
+                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                streamingMessage = null
+                                                isGenerating = false
                                             }
-                                            isGenerating = false
                                         }
                                     }
                                 },
@@ -446,7 +448,7 @@ fun ChatScreen(
                     .weight(1f)
                     .fillMaxWidth()
             ) {
-                if (activeMessages.isEmpty()) {
+                if (displayMessages.isEmpty()) {
                     // Minimalist Empty State
                     Column(
                         modifier = Modifier
@@ -539,7 +541,7 @@ fun ChatScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp)
                     ) {
-                        items(activeMessages, key = { it.id }) { msg ->
+                        items(displayMessages, key = { it.id }) { msg ->
                             if (msg.isUser) {
                                 UserMessageBubble(
                                     message = msg,

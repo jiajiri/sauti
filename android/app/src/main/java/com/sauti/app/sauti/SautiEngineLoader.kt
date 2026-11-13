@@ -47,6 +47,51 @@ object SautiEngineLoader {
     private external fun nativeInitCoreEngine(path: String): Boolean
     private external fun nativeInitVoiceEngine(path: String): Boolean
     private external fun nativeGenerateChatCompletion(prompt: String, callback: NativeTokenCallback)
+    private external fun nativeSetInferenceParams(
+        temperature: Float, topK: Int, topP: Float,
+        repeatPenalty: Float, maxTokens: Int
+    )
+    private external fun nativeSwitchCoreModel(path: String): Boolean
+
+    /**
+     * Applies runtime inference parameters from the user's Settings preferences to the native engine.
+     */
+    fun applyInferenceParams(prefs: com.sauti.app.settings.SautiPreferencesStore) {
+        try {
+            nativeSetInferenceParams(
+                prefs.temperature,
+                prefs.topK,
+                prefs.topP,
+                prefs.repeatPenalty,
+                prefs.maxTokens
+            )
+            Log.i(TAG, "Inference params applied: temp=${prefs.temperature} topK=${prefs.topK} topP=${prefs.topP}")
+        } catch (e: Throwable) {
+            Log.w(TAG, "applyInferenceParams error: ${e.message}")
+        }
+    }
+
+    /**
+     * Hot-swaps the loaded GGUF core model without restarting the app.
+     */
+    suspend fun switchModel(context: Context, tier: com.sauti.app.settings.ModelTier) {
+        val file = java.io.File(context.filesDir, "sauti/${tier.assetFileName}")
+        if (!file.exists()) {
+            Log.w(TAG, "Model file not found for tier ${tier.displayName}: ${file.absolutePath}")
+            return
+        }
+        try {
+            val success = nativeSwitchCoreModel(file.absolutePath)
+            if (success) {
+                sautiCorePath = file.absolutePath
+                Log.i(TAG, "Model switched to ${tier.displayName} at ${file.absolutePath}")
+            } else {
+                Log.w(TAG, "nativeSwitchCoreModel returned false for ${tier.displayName}")
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "switchModel error: ${e.message}")
+        }
+    }
 
     /**
      * Extracts or links asset files into private application storage for zero-copy mmap.
