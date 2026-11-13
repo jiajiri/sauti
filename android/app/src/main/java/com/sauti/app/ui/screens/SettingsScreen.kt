@@ -1,14 +1,13 @@
 package com.sauti.app.ui.screens
 
 import android.content.Context
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -18,22 +17,26 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import com.sauti.app.sauti.SautiEngineLoader
+import com.sauti.app.security.BiometricAuthManager
 import com.sauti.app.settings.ModelTier
 import com.sauti.app.settings.SautiPreferencesStore
+import com.sauti.app.settings.VadSensitivity
 import com.sauti.app.tts.TextToSpeechEngine
 import com.sauti.app.tts.VoicePersona
+import com.sauti.app.viewmodel.SautiNavigationViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
-import kotlin.math.roundToInt
 
-// ─── Color palette ────────────────────────────────────────────────────────────
+// ─── Production Color Palette ────────────────────────────────────────────────
 private val BgDark       = Color(0xFF0D0E11)
 private val CardDark     = Color(0xFF13171E)
 private val CardSelected = Color(0xFF1E2430)
@@ -47,49 +50,130 @@ private val AccentGreen  = Color(0xFF22C55E)
 private val DangerRed    = Color(0xFFEF4444)
 
 /**
- * Settings screen: voice personas, model switcher, expandable Response Tuning accordion,
- * Storage & Data Management with "Clear All History" confirmation dialog.
+ * Clean, Commercial-Grade Production Settings Screen.
+ * Strictly free of internal technical jargon, raw file extensions, and C++ metrics.
  */
 @Composable
 fun SettingsScreen(
     ttsEngine: TextToSpeechEngine?,
-    onBack: () -> Unit,
-    onClearAllHistory: () -> Unit = {}
+    viewModel: SautiNavigationViewModel?,
+    onBack: () -> Unit
 ) {
     val context   = LocalContext.current
     val scope     = rememberCoroutineScope()
     val prefs     = remember { SautiPreferencesStore(context) }
 
+    // State from preferences store
+    var currentName         by remember { mutableStateOf(prefs.userName) }
+    var customInstructions  by remember { mutableStateOf(prefs.customInstructions) }
     var selectedPersona     by remember { mutableStateOf(prefs.voicePersona) }
+    var autoSpeak           by remember { mutableStateOf(prefs.autoSpeakReplies) }
+    var vadSensitivity      by remember { mutableStateOf(prefs.vadSensitivity) }
     var selectedModel       by remember { mutableStateOf(prefs.modelTier) }
-
-    // Accordion state
-    var isTuningExpanded    by remember { mutableStateOf(false) }
-
-    // Parameters
-    var temperature         by remember { mutableStateOf(prefs.temperature) }
-    var topK                by remember { mutableStateOf(prefs.topK.toFloat()) }
-    var topP                by remember { mutableStateOf(prefs.topP) }
+    var autoLowBattery      by remember { mutableStateOf(prefs.autoSwitchLowBattery) }
+    var biometricLock       by remember { mutableStateOf(prefs.biometricLockEnabled) }
 
     var isSwitchingModel    by remember { mutableStateOf(false) }
-    var paramsApplied       by remember { mutableStateOf(false) }
+    var showNameDialog      by remember { mutableStateOf(false) }
+    var showInstructionsDialog by remember { mutableStateOf(false) }
     var showClearDialog     by remember { mutableStateOf(false) }
+    var showPrivacyDialog   by remember { mutableStateOf(false) }
 
-    // Dialog confirmation for Clear All History
+    // ── Edit Name Dialog ───────────────────────────────────────────────────────
+    if (showNameDialog) {
+        var tempName by remember { mutableStateOf(currentName) }
+        AlertDialog(
+            onDismissRequest = { showNameDialog = false },
+            title = { Text("Edit Display Name", color = TextPri, fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = tempName,
+                    onValueChange = { tempName = it },
+                    singleLine = true,
+                    label = { Text("Display Name") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextPri,
+                        unfocusedTextColor = TextPri,
+                        focusedBorderColor = AccentBlue,
+                        unfocusedBorderColor = BorderDim
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            containerColor = CardDark,
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val clean = tempName.trim().ifEmpty { "User" }
+                        currentName = clean
+                        prefs.userName = clean
+                        viewModel?.updateUserName(clean)
+                        showNameDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showNameDialog = false }, border = androidx.compose.foundation.BorderStroke(1.dp, BorderDim)) {
+                    Text("Cancel", color = TextSec)
+                }
+            }
+        )
+    }
+
+    // ── Custom Instructions Dialog ────────────────────────────────────────────
+    if (showInstructionsDialog) {
+        var tempInstructions by remember { mutableStateOf(customInstructions) }
+        AlertDialog(
+            onDismissRequest = { showInstructionsDialog = false },
+            title = { Text("Custom Instructions", color = TextPri, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Tell Sauti how you'd like it to respond (e.g. 'Reply in concise Swahili' or 'Provide bullet points').", color = TextSec, fontSize = 13.sp)
+                    OutlinedTextField(
+                        value = tempInstructions,
+                        onValueChange = { tempInstructions = it },
+                        minLines = 3,
+                        maxLines = 5,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextPri,
+                            unfocusedTextColor = TextPri,
+                            focusedBorderColor = AccentBlue,
+                            unfocusedBorderColor = BorderDim
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            containerColor = CardDark,
+            confirmButton = {
+                Button(
+                    onClick = {
+                        customInstructions = tempInstructions.trim()
+                        prefs.customInstructions = customInstructions
+                        viewModel?.updateCustomInstructions(customInstructions)
+                        SautiEngineLoader.customUserInstructions = customInstructions
+                        showInstructionsDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showInstructionsDialog = false }, border = androidx.compose.foundation.BorderStroke(1.dp, BorderDim)) {
+                    Text("Cancel", color = TextSec)
+                }
+            }
+        )
+    }
+
+    // ── Clear All History Dialog ──────────────────────────────────────────────
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
-            title = {
-                Text(
-                    text = "Clear All History?",
-                    color = TextPri,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp
-                )
-            },
+            title = { Text("Clear All History?", color = TextPri, fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    text = "This will permanently delete all past conversation sessions and message logs from device storage. This action cannot be undone.",
+                    "This will permanently delete all past conversations and messages from this device. This action cannot be undone.",
                     color = TextSec,
                     fontSize = 14.sp
                 )
@@ -99,19 +183,35 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         showClearDialog = false
-                        onClearAllHistory()
+                        viewModel?.clearAllHistory()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
-                ) {
-                    Text("Clear All", color = Color.White)
-                }
+                ) { Text("Clear All", color = Color.White) }
             },
             dismissButton = {
-                OutlinedButton(
-                    onClick = { showClearDialog = false },
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderDim)
-                ) {
+                OutlinedButton(onClick = { showClearDialog = false }, border = androidx.compose.foundation.BorderStroke(1.dp, BorderDim)) {
                     Text("Cancel", color = TextSec)
+                }
+            }
+        )
+    }
+
+    // ── Privacy & Sovereign Policy Dialog ─────────────────────────────────────
+    if (showPrivacyDialog) {
+        AlertDialog(
+            onDismissRequest = { showPrivacyDialog = false },
+            title = { Text("Privacy & Sovereignty", color = TextPri, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("• 100% On-Device AI: Zero audio, text, or biometric data is ever sent to cloud servers.", color = TextSec, fontSize = 13.sp)
+                    Text("• Hardware Security: Encrypted local storage and biometrics protected by Android Keystore.", color = TextSec, fontSize = 13.sp)
+                    Text("• No Telemetry: No third-party trackers or external analytics.", color = TextSec, fontSize = 13.sp)
+                }
+            },
+            containerColor = CardDark,
+            confirmButton = {
+                Button(onClick = { showPrivacyDialog = false }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))) {
+                    Text("Understood")
                 }
             }
         )
@@ -158,54 +258,172 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
 
-            // ══ SECTION 1: Voice Persona ═══════════════════════════════════════
-            SettingsSectionHeader(
-                icon = Icons.Outlined.RecordVoiceOver,
-                title = "Voice Persona"
-            )
+            // ══ 1. Account & Personalization ══════════════════════════════════
+            SectionHeader(icon = Icons.Outlined.Person, title = "Account & Personalization")
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(CardDark)
+                    .border(1.dp, BorderDim, RoundedCornerShape(12.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Profile & Name row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .background(Brush.linearGradient(listOf(Color(0xFF0284C7), Color(0xFF38BDF8)))),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = currentName.firstOrNull()?.uppercase() ?: "U",
+                            color = Color.White,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(currentName, color = TextPri, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Sovereign User Profile", color = TextDim, fontSize = 12.sp)
+                    }
+
+                    IconButton(onClick = { showNameDialog = true }) {
+                        Icon(Icons.Outlined.Edit, "Edit Name", tint = AccentBlue, modifier = Modifier.size(20.dp))
+                    }
+                }
+
+                HorizontalDivider(color = BorderDim, thickness = 0.5.dp)
+
+                // Custom Instructions row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showInstructionsDialog = true },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Custom Instructions", color = TextPri, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Text(
+                            if (customInstructions.isBlank()) "Set preferred response style (e.g. concise)" else customInstructions,
+                            color = TextSec,
+                            fontSize = 12.sp,
+                            maxLines = 1
+                        )
+                    }
+                    Icon(Icons.Outlined.ChevronRight, null, tint = TextDim)
+                }
+            }
+
+            // ══ 2. Voice & Audio ══════════════════════════════════════════════
+            SectionHeader(icon = Icons.Outlined.VolumeUp, title = "Voice & Audio")
 
             VoicePersona.values().forEach { persona ->
                 val isSelected = selectedPersona == persona
-                PersonaCard(
-                    persona    = persona,
+                PersonaRow(
+                    persona = persona,
                     isSelected = isSelected,
-                    onSelect   = {
+                    onSelect = {
                         selectedPersona = persona
                         prefs.voicePersona = persona
                         ttsEngine?.setVoicePersona(persona)
                     },
-                    onPreview  = { ttsEngine?.previewSpeak(persona) }
+                    onPreview = { ttsEngine?.previewSpeak(persona) }
                 )
             }
 
-            // ══ SECTION 2: Core Model ═════════════════════════════════════════
-            SettingsSectionHeader(
-                icon = Icons.Outlined.Memory,
-                title = "Core Model"
-            )
+            // Auto-speak toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(CardDark)
+                    .border(1.dp, BorderDim, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Auto-Speak Responses", color = TextPri, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text("Read answers aloud in chat mode automatically", color = TextDim, fontSize = 12.sp)
+                }
+                Switch(
+                    checked = autoSpeak,
+                    onCheckedChange = {
+                        autoSpeak = it
+                        prefs.autoSpeakReplies = it
+                    },
+                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = AccentBlue)
+                )
+            }
+
+            // Hands-Free VAD sensitivity selector
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(CardDark)
+                    .border(1.dp, BorderDim, RoundedCornerShape(12.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("Hands-Free Sensitivity", color = TextPri, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text("Controls how quickly the microphone activates in voice mode.", color = TextDim, fontSize = 12.sp)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    VadSensitivity.values().forEach { sens ->
+                        val isSelected = vadSensitivity == sens
+                        Surface(
+                            onClick = {
+                                vadSensitivity = sens
+                                prefs.vadSensitivity = sens
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSelected) Color(0xFF1D4ED8) else Color(0xFF1E2430),
+                            modifier = Modifier.weight(1f).height(38.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = sens.displayName,
+                                    color = if (isSelected) Color.White else TextSec,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ══ 3. Offline Intelligence & Battery ═════════════════════════════
+            SectionHeader(icon = Icons.Outlined.Memory, title = "Offline Intelligence")
 
             if (isSwitchingModel) {
                 LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(4.dp)),
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
                     color = AccentBlue,
                     trackColor = CardDark
-                )
-                Text(
-                    text = "Loading ${selectedModel.displayName}...",
-                    color = AccentBlue,
-                    fontSize = 13.sp
                 )
             }
 
             ModelTier.values().forEach { tier ->
                 val isSelected = selectedModel == tier
-                ModelCard(
-                    tier       = tier,
+                ModelTierCard(
+                    tier = tier,
                     isSelected = isSelected,
-                    context    = context,
-                    onSelect   = {
+                    onSelect = {
                         if (!isSwitchingModel && !isSelected) {
                             selectedModel = tier
                             prefs.modelTier = tier
@@ -221,168 +439,163 @@ fun SettingsScreen(
                 )
             }
 
-            // ══ SECTION 3: Generation Tuning Controls (Advanced Accordion) ═════
+            // Auto-switch battery row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(CardDark)
+                    .border(1.dp, BorderDim, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Auto-Switch on Low Battery", color = TextPri, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text("Automatically shift to Battery Saver below 20%", color = TextDim, fontSize = 12.sp)
+                }
+                Switch(
+                    checked = autoLowBattery,
+                    onCheckedChange = {
+                        autoLowBattery = it
+                        prefs.autoSwitchLowBattery = it
+                    },
+                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = AccentBlue)
+                )
+            }
+
+            // ══ 4. Privacy & Security ═════════════════════════════════════════
+            SectionHeader(icon = Icons.Outlined.Lock, title = "Privacy & Security")
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(CardDark)
                     .border(1.dp, BorderDim, RoundedCornerShape(12.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Header (Click to expand/collapse)
+                // Biometric App Lock
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { isTuningExpanded = !isTuningExpanded }
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(Icons.Outlined.Tune, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
-                        Column {
-                            Text(
-                                text = "Response Tuning",
-                                color = TextPri,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = if (isTuningExpanded) "Tuned for power users" else "Casual mode (tap to customize)",
-                                color = TextDim,
-                                fontSize = 12.sp
-                            )
-                        }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("App Lock (Fingerprint / PIN)", color = TextPri, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Text("Lock conversations on shared devices", color = TextDim, fontSize = 12.sp)
                     }
-                    Icon(
-                        imageVector = if (isTuningExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                        contentDescription = "Toggle Tuning",
-                        tint = TextSec
+                    Switch(
+                        checked = biometricLock,
+                        onCheckedChange = {
+                            biometricLock = it
+                            prefs.biometricLockEnabled = it
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = AccentBlue)
                     )
                 }
 
-                AnimatedVisibility(
-                    visible = isTuningExpanded,
-                    enter = expandVertically(),
-                    exit = shrinkVertically()
+                HorizontalDivider(color = BorderDim, thickness = 0.5.dp)
+
+                // Export Conversations
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            scope.launch(Dispatchers.IO) {
+                                val file = viewModel?.exportConversationsToText(context)
+                                if (file != null && file.exists()) {
+                                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(Intent.createChooser(shareIntent, "Export Conversations"))
+                                }
+                            }
+                        },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    Column {
+                        Text("Export Conversations", color = TextPri, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Text("Save all chats as clean .txt transcript", color = TextDim, fontSize = 12.sp)
+                    }
+                    Icon(Icons.Outlined.Share, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
+                }
+
+                HorizontalDivider(color = BorderDim, thickness = 0.5.dp)
+
+                // Clear History
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Clear Chat History", color = TextPri, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Text("Permanently wipe local message logs", color = TextDim, fontSize = 12.sp)
+                    }
+                    OutlinedButton(
+                        onClick = { showClearDialog = true },
+                        border = androidx.compose.foundation.BorderStroke(1.dp, DangerRed),
+                        shape = RoundedCornerShape(8.dp)
                     ) {
-                        HorizontalDivider(color = BorderDim, thickness = 0.5.dp)
-
-                        // 1. Temperature Slider (0.0 to 1.5, default 0.7)
-                        ParamSlider(
-                            label = "Temperature",
-                            value = temperature,
-                            range = 0.0f..1.5f,
-                            steps = 29,
-                            display = "%.2f".format(temperature) + if (temperature <= 0.15f) " (Deterministic)" else "",
-                            hint = "Lower (0.1) produces deterministic answers; higher yields more varied phrasing.",
-                            onValueChange = {
-                                temperature = (it * 100).roundToInt() / 100f
-                                prefs.temperature = temperature
-                                SautiEngineLoader.applyInferenceParams(prefs)
-                                paramsApplied = true
-                            }
-                        )
-
-                        // 2. Top-K Slider (1 to 100, default 40)
-                        ParamSlider(
-                            label = "Top-K",
-                            value = topK,
-                            range = 1f..100f,
-                            steps = 98,
-                            display = topK.roundToInt().toString() + if (topK.roundToInt() == 1) " (Greedy)" else "",
-                            hint = "Setting top-k = 1 forces greedy decoding (picks highest probability token).",
-                            onValueChange = {
-                                topK = it.roundToInt().toFloat()
-                                prefs.topK = topK.roundToInt()
-                                SautiEngineLoader.applyInferenceParams(prefs)
-                                paramsApplied = true
-                            }
-                        )
-
-                        // 3. Top-P Slider (0.1 to 1.0, default 0.9)
-                        ParamSlider(
-                            label = "Top-P (Nucleus)",
-                            value = topP,
-                            range = 0.10f..1.00f,
-                            steps = 17,
-                            display = "%.2f".format(topP),
-                            hint = "Controls nucleus sampling diversity threshold.",
-                            onValueChange = {
-                                topP = (it * 100).roundToInt() / 100f
-                                prefs.topP = topP
-                                SautiEngineLoader.applyInferenceParams(prefs)
-                                paramsApplied = true
-                            }
-                        )
-
-                        // Reset to Defaults Button
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    temperature = 0.70f
-                                    topK        = 40f
-                                    topP        = 0.90f
-                                    prefs.temperature = 0.70f
-                                    prefs.topK        = 40
-                                    prefs.topP        = 0.90f
-                                    SautiEngineLoader.applyInferenceParams(prefs)
-                                    paramsApplied = true
-                                },
-                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderDim),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Icon(Icons.Outlined.RestartAlt, null, modifier = Modifier.size(16.dp), tint = TextSec)
-                                Spacer(Modifier.width(6.dp))
-                                Text("Reset to Defaults", color = TextSec, fontSize = 13.sp)
-                            }
-                        }
-
-                        if (paramsApplied) {
-                            Text(
-                                text = "Parameters active in native llama_sampler chain",
-                                color = AccentGreen,
-                                fontSize = 12.sp
-                            )
-                        }
-
-                        Spacer(Modifier.height(4.dp))
+                        Text("Clear All", color = DangerRed, fontSize = 13.sp)
                     }
                 }
             }
 
-            // ══ SECTION 4: Storage & Data Management ═══════════════════════════
-            SettingsSectionHeader(
-                icon = Icons.Outlined.Storage,
-                title = "Storage & Data Management"
-            )
+            // ══ 5. About & Sovereignty ═════════════════════════════════════════
+            SectionHeader(icon = Icons.Outlined.Info, title = "About Sauti")
 
-            StorageManagementCard(
-                context = context,
-                onClearHistoryClick = { showClearDialog = true }
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(CardDark)
+                    .border(1.dp, BorderDim, RoundedCornerShape(12.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Version", color = TextSec, fontSize = 13.sp)
+                    Text("Sauti AI v1.0.0", color = TextPri, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Architecture", color = TextSec, fontSize = 13.sp)
+                    Text("100% On-Device Sovereign", color = AccentGreen, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
+
+                HorizontalDivider(color = BorderDim, thickness = 0.5.dp)
+
+                Text(
+                    text = "Privacy & Sovereignty Guarantee",
+                    color = AccentBlue,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.clickable { showPrivacyDialog = true }
+                )
+            }
 
             Spacer(modifier = Modifier.height(28.dp))
         }
     }
 }
 
-// ─── Persona Card ─────────────────────────────────────────────────────────────
+// ─── Persona Row ──────────────────────────────────────────────────────────────
 
 @Composable
-private fun PersonaCard(
+private fun PersonaRow(
     persona: VoicePersona,
     isSelected: Boolean,
     onSelect: () -> Unit,
@@ -404,29 +617,12 @@ private fun PersonaCard(
         RadioButton(
             selected = isSelected,
             onClick  = onSelect,
-            colors   = RadioButtonDefaults.colors(
-                selectedColor   = AccentBlue,
-                unselectedColor = TextDim
-            )
+            colors   = RadioButtonDefaults.colors(selectedColor = AccentBlue, unselectedColor = TextDim)
         )
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text       = persona.personaName,
-                color      = if (isSelected) Color.White else TextPri,
-                fontSize   = 15.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text     = persona.description,
-                color    = TextSec,
-                fontSize = 12.sp
-            )
-            Text(
-                text     = "Pitch %.2f  |  Rate %.2f".format(persona.pitch, persona.speechRate),
-                color    = TextDim,
-                fontSize = 11.sp
-            )
+            Text(persona.personaName, color = if (isSelected) Color.White else TextPri, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Text(persona.description, color = TextSec, fontSize = 12.sp)
         }
         OutlinedButton(
             onClick = onPreview,
@@ -441,22 +637,16 @@ private fun PersonaCard(
     }
 }
 
-// ─── Model Card ───────────────────────────────────────────────────────────────
+// ─── Model Tier Card ──────────────────────────────────────────────────────────
 
 @Composable
-private fun ModelCard(
+private fun ModelTierCard(
     tier: ModelTier,
     isSelected: Boolean,
-    context: Context,
     onSelect: () -> Unit
 ) {
     val borderColor = if (isSelected) BorderSel else BorderDim
     val bgColor     = if (isSelected) CardSelected else CardDark
-
-    val fileSize = remember(tier) {
-        val f = File(context.filesDir, "sauti/${tier.assetFileName}")
-        if (f.exists()) "%.0f MB".format(f.length() / 1_048_576.0) else "Not on device"
-    }
 
     Row(
         modifier = Modifier
@@ -471,45 +661,25 @@ private fun ModelCard(
         RadioButton(
             selected = isSelected,
             onClick  = onSelect,
-            colors   = RadioButtonDefaults.colors(
-                selectedColor   = AccentBlue,
-                unselectedColor = TextDim
-            )
+            colors   = RadioButtonDefaults.colors(selectedColor = AccentBlue, unselectedColor = TextDim)
         )
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text       = tier.displayName,
-                    color      = if (isSelected) Color.White else TextPri,
-                    fontSize   = 15.sp,
-                    fontWeight = FontWeight.Medium
-                )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(tier.displayName, color = if (isSelected) Color.White else TextPri, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                 Surface(
                     color = if (isSelected) Color(0xFF1D4ED8) else Color(0xFF1E2430),
                     shape = RoundedCornerShape(4.dp)
                 ) {
                     Text(
-                        text     = tier.paramCount,
-                        color    = if (isSelected) AccentBlue else TextDim,
-                        fontSize = 10.sp,
+                        text = tier.userFacingSize,
+                        color = if (isSelected) AccentBlue else TextDim,
+                        fontSize = 11.sp,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
             }
-            Text(
-                text     = tier.description,
-                color    = TextSec,
-                fontSize = 12.sp
-            )
-            Text(
-                text     = "Size on device: $fileSize",
-                color    = TextDim,
-                fontSize = 11.sp
-            )
+            Text(tier.description, color = TextSec, fontSize = 12.sp)
         }
         if (isSelected) {
             Icon(Icons.Outlined.CheckCircle, null, tint = AccentBlue, modifier = Modifier.size(20.dp))
@@ -517,129 +687,10 @@ private fun ModelCard(
     }
 }
 
-// ─── Param Slider ─────────────────────────────────────────────────────────────
-
-@Composable
-private fun ParamSlider(
-    label: String,
-    value: Float,
-    range: ClosedFloatingPointRange<Float>,
-    steps: Int,
-    display: String,
-    hint: String,
-    onValueChange: (Float) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF1A1F29))
-            .padding(horizontal = 12.dp, vertical = 10.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(label, color = TextPri, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
-            Text(
-                display,
-                color      = AccentBlue,
-                fontSize   = 13.5.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-        Slider(
-            value         = value,
-            onValueChange = onValueChange,
-            valueRange    = range,
-            steps         = steps,
-            colors        = SliderDefaults.colors(
-                thumbColor              = AccentBlue,
-                activeTrackColor        = AccentBlue,
-                inactiveTrackColor      = Color(0xFF283141)
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
-        Text(hint, color = TextDim, fontSize = 11.sp)
-    }
-}
-
-// ─── Storage & Data Management Card ───────────────────────────────────────────
-
-@Composable
-private fun StorageManagementCard(
-    context: Context,
-    onClearHistoryClick: () -> Unit
-) {
-    val sautiDir = remember { File(context.filesDir, "sauti") }
-    val totalModelsSizeMB = remember {
-        if (sautiDir.exists() && sautiDir.isDirectory) {
-            val totalBytes = sautiDir.listFiles()?.sumOf { it.length() } ?: 0L
-            totalBytes / 1_048_576.0
-        } else {
-            0.0
-        }
-    }
-
-    val dbFile = remember { context.getDatabasePath("sauti_database.db") }
-    val dbSizeKB = remember {
-        if (dbFile.exists()) dbFile.length() / 1024.0 else 0.0
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(CardDark)
-            .border(1.dp, BorderDim, RoundedCornerShape(12.dp))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("Models Store (sauti/)", color = TextSec, fontSize = 13.sp)
-            Text("%.1f MB".format(totalModelsSizeMB), color = TextPri, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text("Local Conversation History", color = TextSec, fontSize = 13.sp)
-            Text("%.1f KB".format(dbSizeKB), color = TextPri, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-        }
-
-        HorizontalDivider(color = BorderDim, thickness = 0.5.dp)
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Conversation Data", color = TextPri, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                Text("Remove all stored sessions and messages", color = TextDim, fontSize = 12.sp)
-            }
-            OutlinedButton(
-                onClick = onClearHistoryClick,
-                border = androidx.compose.foundation.BorderStroke(1.dp, DangerRed),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(Icons.Outlined.DeleteOutline, null, tint = DangerRed, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Clear All", color = DangerRed, fontSize = 13.sp)
-            }
-        }
-    }
-}
-
 // ─── Section Header ───────────────────────────────────────────────────────────
 
 @Composable
-private fun SettingsSectionHeader(
+private fun SectionHeader(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String
 ) {
@@ -651,8 +702,8 @@ private fun SettingsSectionHeader(
         Icon(icon, null, tint = AccentBlue, modifier = Modifier.size(18.dp))
         Text(
             title,
-            color      = TextSec,
-            fontSize   = 12.sp,
+            color = TextSec,
+            fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 0.8.sp
         )

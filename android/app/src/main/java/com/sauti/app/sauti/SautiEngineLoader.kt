@@ -31,6 +31,7 @@ object SautiEngineLoader {
 
     private var sautiVoicePath: String? = null
     private var sautiCorePath: String? = null
+    var customUserInstructions: String = ""
 
     init {
         try {
@@ -186,6 +187,9 @@ object SautiEngineLoader {
             if (retrievedContext.isNotBlank()) {
                 append("\nBase your answer strictly on the provided verified context:\n")
                 append(retrievedContext)
+            }
+            if (customUserInstructions.isNotBlank()) {
+                append("\nUser Preferences: ").append(customUserInstructions).append("\n")
             }
             append("<|im_end|>\n")
             append("<|im_start|>user\n")

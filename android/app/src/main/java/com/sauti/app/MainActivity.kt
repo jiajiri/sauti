@@ -92,6 +92,10 @@ class MainActivity : ComponentActivity() {
             com.sauti.app.sauti.SautiEngineLoader.ensureAssetsRegistered(applicationContext)
         }
         val sautiDb = SautiDatabase.getInstance(this)
+        val prefs = com.sauti.app.settings.SautiPreferencesStore(this)
+
+        // Inject initial custom instructions into native engine
+        com.sauti.app.sauti.SautiEngineLoader.customUserInstructions = prefs.customInstructions
 
         setContent {
             SautiTheme {
@@ -99,7 +103,7 @@ class MainActivity : ComponentActivity() {
                     factory = object : ViewModelProvider.Factory {
                         @Suppress("UNCHECKED_CAST")
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return SautiNavigationViewModel(sautiDb.chatSessionDao()) as T
+                            return SautiNavigationViewModel(sautiDb.chatSessionDao(), prefs) as T
                         }
                     }
                 )
@@ -408,11 +412,8 @@ fun SautiMainApp(
                 SautiWorkspace.SETTINGS_WORKSPACE -> {
                     SettingsScreen(
                         ttsEngine = ttsEngine,
-                        onBack = { viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE) },
-                        onClearAllHistory = {
-                            viewModel.clearAllHistory()
-                            viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE)
-                        }
+                        viewModel = viewModel,
+                        onBack = { viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE) }
                     )
                 }
             }

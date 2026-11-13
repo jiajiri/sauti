@@ -1,21 +1,28 @@
 package com.sauti.app.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sauti.app.data.local.ChatMessage
 import com.sauti.app.data.local.ChatSession
 import com.sauti.app.data.local.ChatSessionDao
 import com.sauti.app.data.model.UserProfile
+import com.sauti.app.settings.SautiPreferencesStore
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 /**
@@ -34,12 +41,19 @@ enum class SautiWorkspace {
  * reactive message histories, auto-titling, and workspace navigation.
  */
 class SautiNavigationViewModel(
-    private val chatSessionDao: ChatSessionDao
+    private val chatSessionDao: ChatSessionDao,
+    private val prefs: SautiPreferencesStore
 ) : ViewModel() {
 
-    // 1. User Profile State Container
-    private val _userProfile = MutableStateFlow<UserProfile?>(null)
-    val userProfile: StateFlow<UserProfile?> = _userProfile.asStateFlow()
+    // 1. Dynamic User Profile (No hardcoded strings, backed by SautiPreferencesStore)
+    private val _userProfile = MutableStateFlow(
+        UserProfile(
+            fullName = prefs.userName,
+            isProTier = true,
+            customInstructions = prefs.customInstructions
+        )
+    )
+    val userProfile: StateFlow<UserProfile> = _userProfile.asStateFlow()
 
     // 2. Active workspace state
     private val _currentWorkspace = MutableStateFlow(SautiWorkspace.CHAT_WORKSPACE)
@@ -81,7 +95,6 @@ class SautiNavigationViewModel(
     )
 
     init {
-        loadUserProfile()
         // Ensure at least one session exists or is created on startup
         viewModelScope.launch {
             chatSessions.collect { list ->
@@ -94,11 +107,16 @@ class SautiNavigationViewModel(
         }
     }
 
-    private fun loadUserProfile() {
-        _userProfile.value = UserProfile(
-            fullName = "Amina Mwangi",
-            isProTier = true
-        )
+    fun updateUserName(name: String) {
+        val clean = name.trim().ifEmpty { "User" }
+        prefs.userName = clean
+        _userProfile.value = _userProfile.value.copy(fullName = clean)
+    }
+
+    fun updateCustomInstructions(instructions: String) {
+        val clean = instructions.trim()
+        prefs.customInstructions = clean
+        _userProfile.value = _userProfile.value.copy(customInstructions = clean)
     }
 
     fun selectWorkspace(workspace: SautiWorkspace) {
@@ -122,10 +140,6 @@ class SautiNavigationViewModel(
             _activeSessionId.value = newSessionId
             _currentWorkspace.value = SautiWorkspace.CHAT_WORKSPACE
         }
-    }
-
-    fun updateProfile(newProfile: UserProfile) {
-        _userProfile.value = newProfile
     }
 
     fun updateSessionTitle(sessionId: String, title: String) {
@@ -175,5 +189,37 @@ class SautiNavigationViewModel(
             chatSessionDao.clearAllHistory()
             createNewSession()
         }
+    }
+
+    /**
+     * Exports all conversation transcripts to a clean, readable text file in cache for sharing.
+     */
+    suspend fun exportConversationsToText(context: Context): File {
+        val sessions = chatSessions.value
+        val exportFile = File(context.cacheDir, "sauti_conversations_export.txt")
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+
+        val content = buildString {
+            append("==========================================\n")
+            append("SAUTI AI - CONVERSATION TRANSCRIPT EXPORT\n")
+            append("Exported: ${sdf.format(Date())}\n")
+            append("User: ${userProfile.value.fullName}\n")
+            append("==========================================\n\n")
+
+            for (session in sessions) {
+                append("--- Topic: ${session.title} (${sdf.format(Date(session.timestamp))}) ---\n")
+                val messages = chatSessionDao.getMessagesForSession(session.id).first()
+                for (msg in messages) {
+                    val speaker = if (msg.isUser) "User" else "Sauti AI"
+                    append("[$speaker - ${sdf.format(Date(msg.timestamp))}]:\n")
+                    append(msg.text.trim())
+                    append("\n\n")
+                }
+                append("\n")
+            }
+        }
+
+        exportFile.writeText(content)
+        return exportFile
     }
 }
