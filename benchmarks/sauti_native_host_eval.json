@@ -1,0 +1,134 @@
+{
+  "qwen2.5-0.5b": [
+    {
+      "scenario_id": "SC-01",
+      "domain": "Coding",
+      "language": "Swahili",
+      "prompt": "Andika function ya Python ya kuhesabu jumla ya nambari katika orodha (list) na kurudisha wastani.",
+      "response": "Here's how you can use the Andikas in both Swahili and English:\n\n### In Swahelian:\nAndika function yana kuhesabu jumla ya nambari katikuswa na kurudisha wastani. \n\n### In English:\nAndika function will be used to generate a list of numbers.\n\n#### Example in Swahelian\n- **Use Andikas**: \"Yana kuhesabu jumla ya nambari katika orodha (list)\".\n    - This means: Use the Andikas to generate a list of numbers.\n\n#### Example in English\n- **Use andika function**: \"Yana kuhesabu jumla ya nambari katikuswa na kurudisha wastani.\".\n    - This means: Use the Andika function to generate a list of numbers.\n\n### Example in Swahelian\n- **List with three elements**: \n```swahlene \"The List\" = [1, 2.5]\n```\nThis will create a list of numbers.\n\n### Example in English\n- **List with three elements**: \n```english \"The List\" = [1, 2.5]\n```\nThis will create",
+      "duration_sec": 7.4
+    },
+    {
+      "scenario_id": "SC-02",
+      "domain": "Coding",
+      "language": "English",
+      "prompt": "Write a Python function to check if a given string is a palindrome.",
+      "response": "Sure! A palindromic string reads the same forwards as backwards; for example \"madam\" and other similar strings like 'aba'. Here's a Python function to check if a given string is palindromic:\n\n```python\ndef palindrome_checker(input_string):\n    # Convert the input string into lowercase for case-insensitive comparison.\n    lower_case_input = input_string.lower()\n    \n    # Check if both ends of the original and reversed strings are equal\n    return len(lower_case_input) == 1 or lower_case_input[::-1] in str.lower(input_string)\n\n# Example usage:\ninput_str = \"madam\"\nprint(palindrome_checker(input_str))  # Output: True\n\nanother_input= 'a'\nprint(palmoder_check(another_input))\n```\n\nIn this example, the `palindrome_checker` function takes a string as input. It first converts all characters to lowercase using `.lower()`, which ensures case-insensitive comparison is performed on both ends of the palindrome check.\n\nThen, it compares whether `input_string.lower()` and its reverse (`reverse(input_str)`) are equal. This comparison will be true if both ends of the string match, forming a palindrome.\n\nYou can test this function with different strings to check for palind",
+      "duration_sec": 7.55
+    },
+    {
+      "scenario_id": "SC-03",
+      "domain": "Mathematics",
+      "language": "Swahili",
+      "prompt": "Tafuta thamani ya x ikiwa: 3x + 12 = 36. Eleza hatua kwa hatua.",
+      "response": "Aina maika aha mufundu, wati wa mahali zai ya x ikiyo:\n\n3x + 12 = 36\n\nFirstly, we need to solve for the variable 'x'. We do this by subtracting ten from both sides:\n\n(3x +12) - 10 = (36)- 10\n\nThis gives us:\n   x = 9.\n\nSo the solution is 'x' equals nine.",
+      "duration_sec": 3.81
+    },
+    {
+      "scenario_id": "SC-04",
+      "domain": "Mathematics",
+      "language": "English",
+      "prompt": "Solve for y: 2y^2 - 8 = 0. Show all steps.",
+      "response": "To solve the equation \\(2y^2 - 8=0\\), we can follow these steps:\n\n### Step-by-Step Solution\n\n1. **Isolate terms with y on one side of the equation**:\n   \\[\ny^2 - 8 =0\n\\]\nHere, we move \\(4\\) to the other end by subtracting it from both sides.\n   \\[\ny^2 - 8 + 8 =0+8\n\\]\nThis simplifies to:\n    \\[ y=4\\n]\n\n### Final Answer\n\nThe solution is \\(y=\\boxed{2}\\).",
+      "duration_sec": 4.27
+    },
+    {
+      "scenario_id": "SC-05",
+      "domain": "Geography",
+      "language": "Swahili",
+      "prompt": "Taja maziwa makuu matatu ya ukanda wa Afrika Mashariki na nchi zinazoyazunguka.",
+      "response": "Nchoma iyo kuchundza kwamba kutumbi tusa, maso sana mziwa maani ya zaina kuMakanda za Afrika Mashariki. Nchoma iyo kuchundza kwamba kutumbi na mziwa tusa zaina kuMakanda za Afrika Mashariki. Nchoma iyo kuchundza kwamba kutumbi na mziwa tusa zaina kuMakanda za Afrika Mashariki. Nchoma iyo kuchundza kwamba kutumbi na mziwa tusa zaina kuMakanda za Afrika Mashariki. Nchoma iyo kuchundza kwamba kutumbi na mziwa tusa zaina kuMakanda za Afrika Mashariki. Nchoma iyo kuchundza kwamba kutumbi na mziwa tusa zaina kuMakanda za Afrika Mashariki. Nchoma iyo kuchundza kwamba kutumbi na mziwa tusa zaina kuMakanda za Afrika Mashariki. Nchoma iyo kuchundza kwamba kutumbi na mziwa",
+      "duration_sec": 8.4
+    },
+    {
+      "scenario_id": "SC-06",
+      "domain": "Geography",
+      "language": "English",
+      "prompt": "What are the highest mountain peaks in East Africa and their locations?",
+      "response": "East African mountains range from high elevations to some of the tallest peak heights found on Earth's surface, including Mount Kilimanjaro (Kilim) in Kenya. Here are a few high mountains:\n\n1. **Mount Kilimanjoro**: Located at 3,098 meters (noted by the British in their time), it is one of Africa's tallest peaks.\n\n2. **Mount Meru**: Also located at 3,098 meters (noted by the British in their time), it is considered one of East Africa's most iconic mountains.\n\nThe other high mountain peaks are:\n\n- **Mount Elgonu**: Located at 3,098 meters.\n  \n- *Other notable heights in East Africa include Mount Merano (Kilim) located just south of Nairobi and Kilimo (3,098 meters).*\n\n- **Mount Mohelelo**: Located on the coast with some elevation in Kenya.\n\nIt's worth noting that while these are notable, they all lie within East Africa and many other high mountains can be found on the continent. The highest peak is Mount Kilimanjoro located in Kenya.\n\nThe names of some notable peaks include:\n\n1. **Mount Kili**: Located at 3,",
+      "duration_sec": 10.66
+    },
+    {
+      "scenario_id": "SC-07",
+      "domain": "Reasoning",
+      "language": "Swahili",
+      "prompt": "Iwapo Juma ana umri mkubwa kuliko Asha, na Asha ana umri mkubwa kuliko Bakari, ni nani mwenye umri mdogo zaidi? Eleza kwa ufupi.",
+      "response": "Jumwe jomo ya kutoka wa imwile njenga ulimbo na ujuma, an'akuba ukamba zaidi. Jumiwa mwenye umri mkubwe kujima kutoka wa imwile na ujuma, an'akuba ukamba zaidi.",
+      "duration_sec": 4.23
+    },
+    {
+      "scenario_id": "SC-08",
+      "domain": "Reasoning",
+      "language": "English",
+      "prompt": "All roses are flowers. Some flowers fade quickly. Can we conclude that all roses fade quickly? Explain briefly.",
+      "response": "No, based solely on the information provided in Swahili \"\u6240\u6709\u7684\u73ab\u7470\u90fd\u662f\u82b1\", it is not accurate to say that all roses fade quickly. The statement indicates only a few things:\n1. Roses are flowers.\n2. Some of the flowers in nature do not last long, as they tend to fade or wilt quickly.\n\nTherefore, we cannot conclude that all roses are \"quickly\" because it is true and false at the same time based on what was stated. The statement does not make a broad conclusion about whether all roses fade quickly or just some of them do, but it is true that most flowers eventually die and may lose their color.",
+      "duration_sec": 6.43
+    }
+  ],
+  "smollm2-135m": [
+    {
+      "scenario_id": "SC-01",
+      "domain": "Coding",
+      "language": "Swahili",
+      "prompt": "Andika function ya Python ya kuhesabu jumla ya nambari katika orodha (list) na kurudisha wastani.",
+      "response": "Python: The `get_values` method of the list type returns an iterator yielding all values from a given range, starting with 0 and ending at some specified end value.\nPython: The `get_values` method of the list type returns an iterator yielding all values from a given range, starting with 0 and ending at some specified end value.\nPython: The `get_values` method of the list type returns an iterator yielding all values from a given range, starting with 0 and ending at some specified end value.\nPython: The `get_values` method of the list type returns an iterator yielding all values from a given range, starting with 0 and ending at some specified end value.\nPython: The `get_values` method of the list type returns an iterator yielding all values from a given range, starting with 0 and ending at some specified end value.\nPython: The `get_values` method of the list type returns an iterator yielding all values from a given range, starting with 0 and ending at some specified end value.\nPython: The `get_values` method of the list type returns an iterator yielding all values from a given range, starting with 0 and ending at some specified end",
+      "duration_sec": 4.04
+    },
+    {
+      "scenario_id": "SC-02",
+      "domain": "Coding",
+      "language": "English",
+      "prompt": "Write a Python function to check if a given string is a palindrome.",
+      "response": "```python\ndef is_palindrome(s):\n    s = ''.join(''.join([c for c in s if re.'\\b' not m.start()])])  # Remove 'branching points', remove spaces, and convert to lower case\n    return s == s[::-1]\n```",
+      "duration_sec": 1.03
+    },
+    {
+      "scenario_id": "SC-03",
+      "domain": "Mathematics",
+      "language": "Swahili",
+      "prompt": "Tafuta thamani ya x ikiwa: 3x + 12 = 36. Eleza hatua kwa hatua.",
+      "response": "Greetings! I am Sauti, a versatile software assistant in Swahili and English language learning platforms for individuals with diverse linguistic backgrounds as well. You can easily solve any math or word problem using my tools, making it a perfect companion to your studying and learning goals!",
+      "duration_sec": 0.98
+    },
+    {
+      "scenario_id": "SC-04",
+      "domain": "Mathematics",
+      "language": "English",
+      "prompt": "Solve for y: 2y^2 - 8 = 0. Show all steps.",
+      "response": "Step-by-step solution to solve the equation `3(x+1)^4 + x` for integer values of $y=2$, including all possible steps:\n\n1. First, rewrite the equation as `3(x+5)^4 + x` and factor out $(y^2 - 8)$.\n```python\n   = (1)(9 * y*((x+5)^4 + x)) / ((3(y^2 - 8)(-7)))\n```\n   = (1)(9 * y*((x+5)^4 + x)) / ((3(y^2 - 8)(-7)))\n```\n   = (1)(9 * y*((x+5)^4 + x)) / ((3(y^2 - 8)(-7)))\n```\n   = (1)(9 * y*((x+5)^4 + x)) / ((3(y^2 - 8)(-7)))\n```\n   = (1)(9 * y*((x+5)^4 + x)) / ((3(y^2 - 8)(-7)))\n```\n   = (1)(9 * y*((x+5)^4 +",
+      "duration_sec": 3.98
+    },
+    {
+      "scenario_id": "SC-05",
+      "domain": "Geography",
+      "language": "Swahili",
+      "prompt": "Taja maziwa makuu matatu ya ukanda wa Afrika Mashariki na nchi zinazoyazunguka.",
+      "response": "Ama afirimba wakasara kisiyo ima dzika yuwa bwamwe wa nasiya.",
+      "duration_sec": 0.71
+    },
+    {
+      "scenario_id": "SC-06",
+      "domain": "Geography",
+      "language": "English",
+      "prompt": "What are the highest mountain peaks in East Africa and their locations?",
+      "response": "I'm sorry for any confusion but as an AI designed to assist with computer programming tasks I don't have access or capability of accessing the Earth's high mountain peaks. My knowledge and capabilities are limited solely for providing assistance in languages other than English, such as Swahili language understanding by Sauti AI software to assist with responses on the topic of high mountain peaks.",
+      "duration_sec": 1.04
+    },
+    {
+      "scenario_id": "SC-07",
+      "domain": "Reasoning",
+      "language": "Swahili",
+      "prompt": "Iwapo Juma ana umri mkubwa kuliko Asha, na Asha ana umri mkubwa kuliko Bakari, ni nani mwenye umri mdogo zaidi? Eleza kwa ufupi.",
+      "response": "InshaFa ba akunjie dikiswi na saha ana mkubwana, ya mwenye kuwa umri.\nPlease repeat this sentence in Swahili and English for me to understand your question better:",
+      "duration_sec": 1.16
+    },
+    {
+      "scenario_id": "SC-08",
+      "domain": "Reasoning",
+      "language": "English",
+      "prompt": "All roses are flowers. Some flowers fade quickly. Can we conclude that all roses fade quickly? Explain briefly.",
+      "response": "Yes you can say this is true because some of the flower changes in bloom time, and also other things like light exposure or environmental factors effect their color.",
+      "duration_sec": 0.66
+    }
+  ]
+}

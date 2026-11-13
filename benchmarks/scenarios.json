@@ -1,0 +1,50 @@
+[
+  {
+    "id": "SC-01",
+    "domain": "Coding",
+    "language": "Swahili",
+    "prompt": "Andika function ya Python ya kuhesabu jumla ya nambari katika orodha (list) na kurudisha wastani."
+  },
+  {
+    "id": "SC-02",
+    "domain": "Coding",
+    "language": "English",
+    "prompt": "Write a Python function to check if a given string is a palindrome."
+  },
+  {
+    "id": "SC-03",
+    "domain": "Mathematics",
+    "language": "Swahili",
+    "prompt": "Tafuta thamani ya x ikiwa: 3x + 12 = 36. Eleza hatua kwa hatua."
+  },
+  {
+    "id": "SC-04",
+    "domain": "Mathematics",
+    "language": "English",
+    "prompt": "Solve for y: 2y^2 - 8 = 0. Show all steps."
+  },
+  {
+    "id": "SC-05",
+    "domain": "Geography",
+    "language": "Swahili",
+    "prompt": "Taja maziwa makuu matatu ya ukanda wa Afrika Mashariki na nchi zinazoyazunguka."
+  },
+  {
+    "id": "SC-06",
+    "domain": "Geography",
+    "language": "English",
+    "prompt": "What are the highest mountain peaks in East Africa and their locations?"
+  },
+  {
+    "id": "SC-07",
+    "domain": "Reasoning",
+    "language": "Swahili",
+    "prompt": "Iwapo Juma ana umri mkubwa kuliko Asha, na Asha ana umri mkubwa kuliko Bakari, ni nani mwenye umri mdogo zaidi? Eleza kwa ufupi."
+  },
+  {
+    "id": "SC-08",
+    "domain": "Reasoning",
+    "language": "English",
+    "prompt": "All roses are flowers. Some flowers fade quickly. Can we conclude that all roses fade quickly? Explain briefly."
+  }
+]
