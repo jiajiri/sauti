@@ -44,9 +44,14 @@ object ModelDeliveryManager {
         val sha256Checksum: String? = null
     )
 
-    val MODEL_VOICE_LITE = ModelSpec("voice_lite.bin", 78_643_200L)
-    val MODEL_CORE_LITE = ModelSpec("core_lite.bin", 106_430_464L)
-    val MODEL_CORE_PRO = ModelSpec("core_pro.bin", 428_867_584L)
+    val MODEL_VOICE_SW = ModelSpec(com.sauti.app.SautiConfig.MODEL_VOICE_SW_FILENAME, 160_438_272L)
+    val MODEL_VOICE_EN = ModelSpec(com.sauti.app.SautiConfig.MODEL_VOICE_EN_FILENAME, 59_895_808L)
+    val MODEL_CORE_PRO = ModelSpec(com.sauti.app.SautiConfig.MODEL_CORE_PRO_FILENAME, 806_000_000L)
+    val MODEL_CORE_ULTRA = ModelSpec("core_ultra.bin", 2_600_000_000L) // your_model_core_ultra_name_here
+
+    // Backward compatibility
+    val MODEL_VOICE_LITE = MODEL_VOICE_SW
+    val MODEL_CORE_LITE = MODEL_CORE_PRO
 
     fun getModelFile(context: Context, fileName: String): File {
         val dir = File(context.filesDir, SAUTI_DIR_NAME)

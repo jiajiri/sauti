@@ -1,6 +1,8 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.dokka'
+    id 'com.google.devtools.ksp'
 }
 
 android {
@@ -122,4 +124,11 @@ dependencies {
 
     debugImplementation 'androidx.compose.ui:ui-tooling'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
+
+    // Dokka KDoc Documentation Engine
+    dokkaHtmlPlugin 'org.jetbrains.dokka:android-documentation-plugin:1.9.20'
+
+    // Showkase Interactive UI Component Browser (Airbnb)
+    implementation 'com.airbnb.android:showkase:1.0.3'
+    ksp 'com.airbnb.android:showkase-processor:1.0.3'
 }

@@ -23,6 +23,7 @@ build/
 *.onnx
 models_store/
 benchmarks/audio_test/
+encrypted_models_cdn/
 
 # Allow GBNF grammars inside models/
 !models/grammars/
