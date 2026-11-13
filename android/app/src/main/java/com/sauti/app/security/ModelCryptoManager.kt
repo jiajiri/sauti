@@ -63,12 +63,24 @@ object ModelCryptoManager {
 
     /**
      * Decrypts an encrypted model stream directly into private local storage.
+     * Optionally decompresses on-the-fly via GZIP if the remote asset was compressed.
      * Reads the 12-byte IV prefix and decrypts via AES-256-GCM.
      */
-    fun decryptStream(encryptedStream: InputStream, targetFile: File, key: SecretKey): Boolean {
+    fun decryptStream(
+        encryptedStream: InputStream,
+        targetFile: File,
+        key: SecretKey,
+        isGzipCompressed: Boolean = false
+    ): Boolean {
         return try {
+            val streamToDecrypt = if (isGzipCompressed) {
+                java.util.zip.GZIPInputStream(encryptedStream)
+            } else {
+                encryptedStream
+            }
+
             val iv = ByteArray(GCM_IV_LENGTH)
-            val bytesRead = encryptedStream.read(iv)
+            val bytesRead = streamToDecrypt.read(iv)
             if (bytesRead != GCM_IV_LENGTH) {
                 return false
             }
@@ -80,7 +92,7 @@ object ModelCryptoManager {
             targetFile.parentFile?.mkdirs()
             val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
 
-            CipherInputStream(encryptedStream, cipher).use { cis ->
+            CipherInputStream(streamToDecrypt, cipher).use { cis ->
                 FileOutputStream(tempFile).use { fos ->
                     cis.copyTo(fos)
                 }
