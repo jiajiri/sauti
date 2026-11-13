@@ -95,7 +95,8 @@ object SautiEngineLoader {
     }
 
     /**
-     * Extracts or links asset files into private application storage for zero-copy mmap.
+     * Verifies and links models in private application storage for zero-copy mmap.
+     * If models are not yet downloaded, triggers background WorkManager fetch while falling back safely.
      */
     fun ensureAssetsRegistered(context: Context): Pair<String, String> {
         val sautiDir = File(context.filesDir, "sauti")
@@ -103,14 +104,27 @@ object SautiEngineLoader {
             sautiDir.mkdirs()
         }
 
+        // Schedule background model sync
+        try {
+            com.sauti.app.sync.ModelDownloadWorker.schedule(context)
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to schedule model sync: ${e.message}")
+        }
+
         val voiceFile = File(sautiDir, "voice_lite.bin")
         if (!voiceFile.exists() || voiceFile.length() == 0L) {
             copyAssetToFile(context, ASSET_SAUTI_VOICE_LITE, voiceFile)
         }
 
-        val coreFile = File(sautiDir, "core_pro.bin")
+        // Check for core_lite or core_pro
+        var coreFile = File(sautiDir, "core_pro.bin")
         if (!coreFile.exists() || coreFile.length() == 0L) {
-            copyAssetToFile(context, ASSET_SAUTI_CORE_PRO, coreFile)
+            val liteFile = File(sautiDir, "core_lite.bin")
+            if (liteFile.exists() && liteFile.length() > 0L) {
+                coreFile = liteFile
+            } else {
+                copyAssetToFile(context, ASSET_SAUTI_CORE_LITE, coreFile)
+            }
         }
 
         sautiVoicePath = voiceFile.absolutePath
@@ -120,8 +134,12 @@ object SautiEngineLoader {
         initKnowledgeStore(context)
 
         try {
-            nativeInitVoiceEngine(sautiVoicePath!!)
-            nativeInitCoreEngine(sautiCorePath!!)
+            if (voiceFile.exists() && voiceFile.length() > 1024 * 1024) {
+                nativeInitVoiceEngine(sautiVoicePath!!)
+            }
+            if (coreFile.exists() && coreFile.length() > 1024 * 1024) {
+                nativeInitCoreEngine(sautiCorePath!!)
+            }
         } catch (e: Throwable) {
             Log.w(TAG, "Native engine init: " + e.message)
         }
@@ -131,6 +149,11 @@ object SautiEngineLoader {
 
     private fun copyAssetToFile(context: Context, assetPath: String, destFile: File) {
         try {
+            val assetList = context.assets.list("sauti") ?: emptyArray()
+            val fileName = assetPath.substringAfterLast("/")
+            if (!assetList.contains(fileName)) {
+                return // Not bundled in APK; will be downloaded remotely
+            }
             context.assets.open(assetPath).use { input ->
                 FileOutputStream(destFile).use { output ->
                     val buffer = ByteArray(64 * 1024)
@@ -143,7 +166,7 @@ object SautiEngineLoader {
             }
             Log.i(TAG, "Registered asset $assetPath -> ${destFile.absolutePath}")
         } catch (e: Exception) {
-            Log.w(TAG, "Asset $assetPath could not be copied directly: ${e.message}")
+            Log.d(TAG, "Asset $assetPath not bundled; awaiting remote sync: ${e.message}")
         }
     }
 
