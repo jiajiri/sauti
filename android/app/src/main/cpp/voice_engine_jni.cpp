@@ -27,14 +27,18 @@ static std::string g_sauti_core_path;
 static bool g_sauti_voice_initialized = false;
 static bool g_sauti_core_initialized = false;
 
-// Runtime-configurable inference parameters (safe defaults match original hardcoded values)
+// Runtime-configurable inference parameters
+// Tuned for ZERO hallucinations: deterministic sampling, low temp, min-p filtering
 static struct {
-    float temperature    = 0.7f;
-    int   top_k          = 40;
-    float top_p          = 0.90f;
-    float repeat_penalty = 1.25f;
+    float temperature    = 0.15f;
+    int   top_k          = 25;
+    float top_p          = 0.85f;
+    float repeat_penalty = 1.18f;
     int   max_tokens     = 512;
 } g_inf_params;
+
+// Active ASR language: "sw" (default Tanzanian Swahili) or "en" (English)
+static std::string g_active_asr_language = "sw";
 
 // Global lock-free ring buffer for 16kHz audio samples
 static sauti::dsa::SpscRingBuffer<int16_t, 65536> g_audio_ring_buffer;
@@ -218,8 +222,21 @@ Java_com_sauti_app_SautiInputMethodService_nativeTranscribeStreaming(
     wparams.print_progress = false;
     wparams.print_realtime = false;
     wparams.print_timestamps = false;
-    wparams.language = "sw";
     wparams.n_threads = 4;
+
+    // Strict anti-hallucination settings:
+    // 1. Cut off background silence & breathing (prevents "Asante kwa kutazama" loops)
+    wparams.no_speech_thold = 0.60f;
+    // 2. Reject low-confidence acoustic noise
+    wparams.logprob_thold = -1.0f;
+    // 3. Disable random creative temperature exploration
+    wparams.temperature = 0.0f;
+    wparams.temperature_inc = 0.0f;
+    // 4. Force single segment transcription for clean voice commands
+    wparams.single_segment = true;
+    // 5. Explicit language locking
+    wparams.language = g_active_asr_language.c_str();
+    wparams.translate = false;
 
     if (whisper_full(g_whisper_context, wparams, pcm_float.data(), pcm_float.size()) != 0) {
         LOGE("Whisper full transcription failed.");
@@ -392,6 +409,20 @@ Java_com_sauti_app_sauti_SautiEngineLoader_nativeSetInferenceParams(
     g_inf_params.max_tokens     = maxTok;
     LOGI("Inference params updated: temp=%.2f topK=%d topP=%.2f repPen=%.2f maxTok=%d",
          temp, topK, topP, repPen, maxTok);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_sauti_app_sauti_SautiEngineLoader_nativeSetVoiceLanguage(
+    JNIEnv* env, jobject /* this */, jstring jLang
+) {
+    if (!jLang) return;
+    const char* clang = env->GetStringUTFChars(jLang, nullptr);
+    if (!clang) return;
+
+    std::lock_guard<std::mutex> lock(g_engine_mutex);
+    g_active_asr_language = std::string(clang);
+    env->ReleaseStringUTFChars(jLang, clang);
+    LOGI("Active ASR language switched to: %s", g_active_asr_language.c_str());
 }
 
 // ─── Settings: Hot-Swap Core GGUF Model ──────────────────────────────────────

@@ -53,6 +53,19 @@ object SautiEngineLoader {
         repeatPenalty: Float, maxTokens: Int
     )
     private external fun nativeSwitchCoreModel(path: String): Boolean
+    private external fun nativeSetVoiceLanguage(lang: String)
+
+    /**
+     * Toggles between Tanzanian Swahili ("sw") and English ("en") voice transcription.
+     */
+    fun setVoiceLanguage(languageCode: String) {
+        try {
+            nativeSetVoiceLanguage(languageCode)
+            Log.i(TAG, "Voice ASR language toggled to: $languageCode")
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to toggle voice language: ${e.message}")
+        }
+    }
 
     /**
      * Applies runtime inference parameters from the user's Settings preferences to the native engine.
@@ -199,9 +212,9 @@ object SautiEngineLoader {
         } else ""
 
         val systemLanguageInstruction = if (detectedLang == com.sauti.app.rag.DetectedLanguage.SWAHILI) {
-            "Wewe ni Sauti AI, msaidizi mahiri wa kiteknolojia na uprogramu. Jibu kila swali kwa Kiswahili Sanifu na Fasaha cha Tanzania na Afrika Mashariki. Toa majibu kamili ya moja kwa moja bila kutumia maneno yasiyoeleweka."
+            "Wewe ni Sauti AI, msaidizi mwerevu na mwaminifu unayeongea Kiswahili fasaha cha Tanzania na Kiingereza. Jibu maswali kwa ufupi, kwa usahihi, na bila kubuni taarifa usizozijua. Kama huna uhakika au hujui jibu, sema bayana: 'Samahani, sina taarifa hiyo kwa sasa.' Toa majibu ya moja kwa moja."
         } else {
-            "You are Sauti AI, an intelligent coding and technical assistant. Reply directly with complete code or solution."
+            "You are Sauti AI, an intelligent, factual bilingual assistant. Answer concisely and accurately. If you are uncertain or do not know the answer, explicitly state: 'I do not have enough verified information on that.' Never fabricate or hallucinate facts."
         }
 
         val formattedPrompt = buildString {
