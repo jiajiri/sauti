@@ -4,16 +4,6 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#0B0E14"
+        android:fillColor="#0D6B7A"
         android:pathData="M0,0h108v108h-108z" />
-    <!-- Subtle technical grid rings -->
-    <path
-        android:strokeColor="#162030"
-        android:strokeWidth="1"
-        android:pathData="M54,54m-42,0a42,42 0,1,1 84,0a42,42 0,1,1 -84,0" />
-    <path
-        android:strokeColor="#1E2B40"
-        android:strokeWidth="1"
-        android:pathData="M54,54m-28,0a28,28 0,1,1 56,0a28,28 0,1,1 -56,0" />
 </vector>
-

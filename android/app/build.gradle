@@ -57,6 +57,18 @@ android {
         }
     }
 
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def abiName = output.getFilter(com.android.build.OutputFile.ABI)
+            def baseName = "sauti-v${variant.versionName}"
+            if (abiName != null) {
+                outputFileName = "${baseName}-${abiName}-${variant.buildType.name}.apk"
+            } else {
+                outputFileName = "${baseName}-${variant.buildType.name}.apk"
+            }
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
