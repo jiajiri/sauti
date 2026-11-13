@@ -53,6 +53,7 @@ private val DangerRed    = Color(0xFFEF4444)
  * Clean, Commercial-Grade Production Settings Screen.
  * Strictly free of internal technical jargon, raw file extensions, and C++ metrics.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     ttsEngine: TextToSpeechEngine?,
@@ -79,13 +80,25 @@ fun SettingsScreen(
     var showClearDialog     by remember { mutableStateOf(false) }
     var showPrivacyDialog   by remember { mutableStateOf(false) }
 
-    // ── Edit Name Dialog ───────────────────────────────────────────────────────
+    // ── Edit Name Bottom Sheet ───────────────────────────────────────────────
     if (showNameDialog) {
         var tempName by remember { mutableStateOf(currentName) }
-        AlertDialog(
+        ModalBottomSheet(
             onDismissRequest = { showNameDialog = false },
-            title = { Text("Edit Display Name", color = TextPri, fontWeight = FontWeight.Bold) },
-            text = {
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = CardDark,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF333B48)) },
+            modifier = Modifier.imePadding()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+                    .navigationBarsPadding(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("Edit Display Name", color = TextPri, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("This name is used to personalize your sovereign profile and circular avatar badge.", color = TextSec, fontSize = 14.sp)
                 OutlinedTextField(
                     value = tempName,
                     onValueChange = { tempName = it },
@@ -99,122 +112,184 @@ fun SettingsScreen(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
-            },
-            containerColor = CardDark,
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val clean = tempName.trim().ifEmpty { "User" }
-                        currentName = clean
-                        prefs.userName = clean
-                        viewModel?.updateUserName(clean)
-                        showNameDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
-                ) { Text("Save") }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { showNameDialog = false }, border = androidx.compose.foundation.BorderStroke(1.dp, BorderDim)) {
-                    Text("Cancel", color = TextSec)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { showNameDialog = false },
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderDim),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Cancel", color = TextSec)
+                    }
+                    Button(
+                        onClick = {
+                            val clean = tempName.trim().ifEmpty { "User" }
+                            currentName = clean
+                            prefs.userName = clean
+                            viewModel?.updateUserName(clean)
+                            showNameDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Save")
+                    }
                 }
             }
-        )
+        }
     }
 
-    // ── Custom Instructions Dialog ────────────────────────────────────────────
+    // ── Custom Instructions Bottom Sheet ──────────────────────────────────────
     if (showInstructionsDialog) {
         var tempInstructions by remember { mutableStateOf(customInstructions) }
-        AlertDialog(
+        ModalBottomSheet(
             onDismissRequest = { showInstructionsDialog = false },
-            title = { Text("Custom Instructions", color = TextPri, fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Tell Sauti how you'd like it to respond (e.g. 'Reply in concise Swahili' or 'Provide bullet points').", color = TextSec, fontSize = 13.sp)
-                    OutlinedTextField(
-                        value = tempInstructions,
-                        onValueChange = { tempInstructions = it },
-                        minLines = 3,
-                        maxLines = 5,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = TextPri,
-                            unfocusedTextColor = TextPri,
-                            focusedBorderColor = AccentBlue,
-                            unfocusedBorderColor = BorderDim
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = CardDark,
-            confirmButton = {
-                Button(
-                    onClick = {
-                        customInstructions = tempInstructions.trim()
-                        prefs.customInstructions = customInstructions
-                        viewModel?.updateCustomInstructions(customInstructions)
-                        SautiEngineLoader.customUserInstructions = customInstructions
-                        showInstructionsDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
-                ) { Text("Save") }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { showInstructionsDialog = false }, border = androidx.compose.foundation.BorderStroke(1.dp, BorderDim)) {
-                    Text("Cancel", color = TextSec)
-                }
-            }
-        )
-    }
-
-    // ── Clear All History Dialog ──────────────────────────────────────────────
-    if (showClearDialog) {
-        AlertDialog(
-            onDismissRequest = { showClearDialog = false },
-            title = { Text("Clear All History?", color = TextPri, fontWeight = FontWeight.Bold) },
-            text = {
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF333B48)) },
+            modifier = Modifier.imePadding()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+                    .navigationBarsPadding(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("Custom Instructions", color = TextPri, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    "This will permanently delete all past conversations and messages from this device. This action cannot be undone.",
+                    "Tell Sauti how you'd like it to respond (e.g. 'Reply in concise Swahili' or 'Provide bullet points'). These instructions are applied offline to your conversational context.",
                     color = TextSec,
                     fontSize = 14.sp
                 )
-            },
-            containerColor = CardDark,
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showClearDialog = false
-                        viewModel?.clearAllHistory()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
-                ) { Text("Clear All", color = Color.White) }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { showClearDialog = false }, border = androidx.compose.foundation.BorderStroke(1.dp, BorderDim)) {
-                    Text("Cancel", color = TextSec)
+                OutlinedTextField(
+                    value = tempInstructions,
+                    onValueChange = { tempInstructions = it },
+                    minLines = 4,
+                    maxLines = 8,
+                    placeholder = { Text("e.g. Always answer in clear, formal Swahili...", color = TextDim) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextPri,
+                        unfocusedTextColor = TextPri,
+                        focusedBorderColor = AccentBlue,
+                        unfocusedBorderColor = BorderDim
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { showInstructionsDialog = false },
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderDim),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Cancel", color = TextSec)
+                    }
+                    Button(
+                        onClick = {
+                            customInstructions = tempInstructions.trim()
+                            prefs.customInstructions = customInstructions
+                            viewModel?.updateCustomInstructions(customInstructions)
+                            SautiEngineLoader.customUserInstructions = customInstructions
+                            showInstructionsDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Save Instructions")
+                    }
                 }
             }
-        )
+        }
     }
 
-    // ── Privacy & Sovereign Policy Dialog ─────────────────────────────────────
-    if (showPrivacyDialog) {
-        AlertDialog(
-            onDismissRequest = { showPrivacyDialog = false },
-            title = { Text("Privacy & Sovereignty", color = TextPri, fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("• 100% On-Device AI: Zero audio, text, or biometric data is ever sent to cloud servers.", color = TextSec, fontSize = 13.sp)
-                    Text("• Hardware Security: Encrypted local storage and biometrics protected by Android Keystore.", color = TextSec, fontSize = 13.sp)
-                    Text("• No Telemetry: No third-party trackers or external analytics.", color = TextSec, fontSize = 13.sp)
-                }
-            },
+    // ── Clear All History Bottom Sheet ────────────────────────────────────────
+    if (showClearDialog) {
+        ModalBottomSheet(
+            onDismissRequest = { showClearDialog = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = CardDark,
-            confirmButton = {
-                Button(onClick = { showPrivacyDialog = false }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))) {
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF333B48)) }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+                    .navigationBarsPadding(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Icon(Icons.Outlined.WarningAmber, contentDescription = null, tint = DangerRed, modifier = Modifier.size(26.dp))
+                    Text("Clear All Chat History?", color = TextPri, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+                Text(
+                    "This action will permanently delete all past conversations and stored message logs from this device. Once deleted, this data cannot be recovered.",
+                    color = TextSec,
+                    fontSize = 14.sp
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { showClearDialog = false },
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderDim),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Cancel", color = TextSec)
+                    }
+                    Button(
+                        onClick = {
+                            showClearDialog = false
+                            viewModel?.clearAllHistory()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = DangerRed),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Clear All", color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Privacy & Sovereign Policy Bottom Sheet ───────────────────────────────
+    if (showPrivacyDialog) {
+        ModalBottomSheet(
+            onDismissRequest = { showPrivacyDialog = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = CardDark,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF333B48)) }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+                    .navigationBarsPadding(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Icon(Icons.Outlined.Security, contentDescription = null, tint = AccentGreen, modifier = Modifier.size(26.dp))
+                    Text("Privacy & Sovereignty Guarantee", color = TextPri, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("• 100% On-Device AI: All language and speech processing runs locally using device hardware. Zero prompts or speech audio are ever transmitted over the network.", color = TextSec, fontSize = 14.sp)
+                    Text("• Hardware-Backed Protection: Local storage and biometric locks are safeguarded by Android Keystore hardware security modules.", color = TextSec, fontSize = 14.sp)
+                    Text("• Zero Cloud Telemetry: Sauti does not bundle third-party tracking SDKs, analytics, or behavioral trackers.", color = TextSec, fontSize = 14.sp)
+                }
+                Button(
+                    onClick = { showPrivacyDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp)
+                ) {
                     Text("Understood")
                 }
             }
-        )
+        }
     }
 
     Column(

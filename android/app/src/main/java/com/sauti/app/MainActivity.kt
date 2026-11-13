@@ -256,14 +256,6 @@ fun SautiMainApp(
                             isSelected = currentWorkspace == SautiWorkspace.NOTEBOOKS_WORKSPACE,
                             onClick = { viewModel.selectWorkspace(SautiWorkspace.NOTEBOOKS_WORKSPACE); coroutineScope.launch { drawerState.close() } }
                         )
-
-                        // SETTINGS_WORKSPACE
-                        SidebarModuleRow(
-                            icon = Icons.Outlined.Settings,
-                            label = "Settings",
-                            isSelected = currentWorkspace == SautiWorkspace.SETTINGS_WORKSPACE,
-                            onClick = { viewModel.selectWorkspace(SautiWorkspace.SETTINGS_WORKSPACE); coroutineScope.launch { drawerState.close() } }
-                        )
                     }
 
                     Divider(
