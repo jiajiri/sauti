@@ -151,26 +151,38 @@ def main():
     model_mappings = [
         {
             "id": "core_pro",
-            "source": os.path.join(MODELS_DIR, "qwen2.5-0.5b-chat-q4_0.gguf"),
-            "target": "core_pro.bin.enc",
+            "name": "CraneAILabs/swahili-gemma-1b-GGUF",
+            "source": os.path.join(MODELS_DIR, "swahili-gemma-1b-q4_k_m.gguf"),
+            "target": "swahili-gemma-1b-q4_k_m.gguf.enc",
             "output_filename": "core_pro.bin",
             "required": True,
             "version": args.version
         },
         {
             "id": "core_lite",
-            "source": os.path.join(MODELS_DIR, "smollm2-135m-sw-q4.gguf"),
+            "name": "Qwen2.5-0.5B-Chat-Q4_0",
+            "source": os.path.join(MODELS_DIR, "qwen2.5-0.5b-chat-q4_0.gguf"),
             "target": "core_lite.bin.enc",
             "output_filename": "core_lite.bin",
             "required": False,
             "version": args.version
         },
         {
-            "id": "voice_lite",
-            "source": os.path.join(MODELS_DIR, "whisper-tiny-sw-q4.bin"),
-            "target": "voice_lite.bin.enc",
+            "id": "voice_sw",
+            "name": "JTulel/whisper-swahili-small-q4_1 (Tanzanian Swahili Fine-Tuned)",
+            "source": os.path.join(MODELS_DIR, "whisper-swahili-small-q4_1.bin"),
+            "target": "whisper-swahili-small-q4_1.bin.enc",
             "output_filename": "voice_lite.bin",
             "required": True,
+            "version": args.version
+        },
+        {
+            "id": "voice_en",
+            "name": "Whisper-Base.en-Q5_1 (English Pure Voice Companion)",
+            "source": os.path.join(MODELS_DIR, "ggml-base.en-q5_1.bin"),
+            "target": "ggml-base.en-q5_1.bin.enc",
+            "output_filename": "voice_en.bin",
+            "required": False,
             "version": args.version
         }
     ]
