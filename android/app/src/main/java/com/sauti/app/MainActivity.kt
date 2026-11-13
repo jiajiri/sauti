@@ -98,16 +98,17 @@ class MainActivity : ComponentActivity() {
         com.sauti.app.sauti.SautiEngineLoader.customUserInstructions = prefs.customInstructions
 
         setContent {
-            SautiTheme {
-                val viewModel: SautiNavigationViewModel = viewModel(
-                    factory = object : ViewModelProvider.Factory {
-                        @Suppress("UNCHECKED_CAST")
-                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return SautiNavigationViewModel(sautiDb.chatSessionDao(), prefs) as T
-                        }
+            val viewModel: SautiNavigationViewModel = viewModel(
+                factory = object : ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        return SautiNavigationViewModel(sautiDb.chatSessionDao(), prefs) as T
                     }
-                )
+                }
+            )
+            val appTheme by viewModel.appTheme.collectAsState()
 
+            SautiTheme(appTheme = appTheme) {
                 SautiMainApp(viewModel = viewModel, ttsEngine = ttsEngine)
             }
         }
@@ -140,6 +141,17 @@ fun SautiMainApp(
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
+
+    // Professional Android system Back button handling:
+    // 1. If drawer is open, back closes drawer.
+    // 2. If in any sub-workspace (Audio, Settings, Library, Notebooks), back returns to Chat.
+    androidx.activity.compose.BackHandler(enabled = drawerState.isOpen) {
+        coroutineScope.launch { drawerState.close() }
+    }
+
+    androidx.activity.compose.BackHandler(enabled = !drawerState.isOpen && currentWorkspace != SautiWorkspace.CHAT_WORKSPACE) {
+        viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE)
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -525,15 +537,6 @@ private fun UserProfileFooter(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    if (profile.isProTier) {
-                        Text(
-                            text = "PRO",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
                 }
             }
 

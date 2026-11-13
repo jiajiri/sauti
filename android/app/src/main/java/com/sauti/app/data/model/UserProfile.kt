@@ -6,7 +6,7 @@ package com.sauti.app.data.model
  */
 data class UserProfile(
     val fullName: String,
-    val isProTier: Boolean = true,
+    val isProTier: Boolean = false,
     val customInstructions: String = ""
 ) {
     /**

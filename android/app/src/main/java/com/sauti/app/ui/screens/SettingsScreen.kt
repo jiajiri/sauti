@@ -60,12 +60,18 @@ fun SettingsScreen(
     viewModel: SautiNavigationViewModel?,
     onBack: () -> Unit
 ) {
+    // Native Android Back gesture & button support
+    androidx.activity.compose.BackHandler(enabled = true) {
+        onBack()
+    }
+
     val context   = LocalContext.current
     val scope     = rememberCoroutineScope()
     val prefs     = remember { SautiPreferencesStore(context) }
 
     // State from preferences store
     var currentName         by remember { mutableStateOf(prefs.userName) }
+    var currentTheme        by remember { mutableStateOf(prefs.appTheme) }
     var customInstructions  by remember { mutableStateOf(prefs.customInstructions) }
     var selectedPersona     by remember { mutableStateOf(prefs.voicePersona) }
     var autoSpeak           by remember { mutableStateOf(prefs.autoSpeakReplies) }
@@ -619,6 +625,51 @@ fun SettingsScreen(
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text("Clear All", color = DangerRed, fontSize = 13.sp)
+                    }
+                }
+            }
+
+            // ══ 5. Appearance & Theme ══════════════════════════════════════════
+            SectionHeader(icon = Icons.Outlined.Palette, title = "Appearance")
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(CardDark)
+                    .border(1.dp, BorderDim, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Theme Mode", color = TextPri, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text("Auto matches device system theme", color = TextDim, fontSize = 12.sp)
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    com.sauti.app.settings.AppTheme.values().forEach { themeOption ->
+                        val isSel = currentTheme == themeOption
+                        Surface(
+                            onClick = {
+                                currentTheme = themeOption
+                                viewModel?.updateTheme(themeOption)
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSel) AccentBlue else CardSelected,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isSel) AccentBlue else BorderDim
+                            )
+                        ) {
+                            Text(
+                                text = themeOption.displayName,
+                                color = if (isSel) Color.White else TextSec,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
                     }
                 }
             }

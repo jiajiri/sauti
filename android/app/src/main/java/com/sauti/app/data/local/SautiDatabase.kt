@@ -101,7 +101,7 @@ private class SQLiteChatSessionDao(private val dbHelper: SautiDbOpenHelper) : Ch
                 null,
                 null,
                 null,
-                "timestamp ASC"
+                "timestamp DESC"
             )
             cursor.use {
                 val idIdx = it.getColumnIndexOrThrow("id")
@@ -225,7 +225,15 @@ private class SQLiteChatSessionDao(private val dbHelper: SautiDbOpenHelper) : Ch
                 put("timestamp", message.timestamp)
             }
             db.insertWithOnConflict("chat_messages", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+            
+            // Bump session timestamp so active conversation moves to top of history
+            val sessionValues = ContentValues().apply {
+                put("timestamp", message.timestamp)
+            }
+            db.update("chat_sessions", sessionValues, "id = ?", arrayOf(message.sessionId))
+            
             refreshMessages(message.sessionId)
+            refreshSessions()
         } catch (e: Exception) {
             e.printStackTrace()
         }

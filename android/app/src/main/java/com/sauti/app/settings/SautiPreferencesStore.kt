@@ -40,6 +40,15 @@ enum class VadSensitivity(
 }
 
 /**
+ * Application Theme Modes: Auto (System-driven), Dark Mode, or Light Mode.
+ */
+enum class AppTheme(val displayName: String) {
+    SYSTEM("Auto"),
+    DARK("Dark"),
+    LIGHT("Light")
+}
+
+/**
  * Persistent user preferences backing commercial settings.
  * 100% sovereign, on-device SharedPreferences storage.
  */
@@ -57,6 +66,16 @@ class SautiPreferencesStore(context: Context) {
     var customInstructions: String
         get() = prefs.getString(KEY_CUSTOM_INSTRUCTIONS, "") ?: ""
         set(value) { prefs.edit().putString(KEY_CUSTOM_INSTRUCTIONS, value.trim()).apply() }
+
+    // ── Appearance & Theme ─────────────────────────────────────────────────────
+
+    var appTheme: AppTheme
+        get() {
+            val name = prefs.getString(KEY_APP_THEME, AppTheme.SYSTEM.name)
+            return try { AppTheme.valueOf(name ?: AppTheme.SYSTEM.name) }
+            catch (e: Exception) { AppTheme.SYSTEM }
+        }
+        set(value) { prefs.edit().putString(KEY_APP_THEME, value.name).apply() }
 
     // ── Voice & Audio ──────────────────────────────────────────────────────────
 
@@ -136,6 +155,7 @@ class SautiPreferencesStore(context: Context) {
         private const val PREFS_NAME              = "sauti_user_prefs"
         private const val KEY_USER_NAME           = "user_display_name"
         private const val KEY_CUSTOM_INSTRUCTIONS = "custom_instructions"
+        private const val KEY_APP_THEME           = "app_theme"
         private const val KEY_VOICE_PERSONA       = "voice_persona"
         private const val KEY_AUTO_SPEAK          = "auto_speak_replies"
         private const val KEY_VAD_SENSITIVITY     = "vad_sensitivity"

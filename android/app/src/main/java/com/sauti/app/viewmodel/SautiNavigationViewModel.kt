@@ -49,7 +49,7 @@ class SautiNavigationViewModel(
     private val _userProfile = MutableStateFlow(
         UserProfile(
             fullName = prefs.userName,
-            isProTier = true,
+            isProTier = false,
             customInstructions = prefs.customInstructions
         )
     )
@@ -59,11 +59,15 @@ class SautiNavigationViewModel(
     private val _currentWorkspace = MutableStateFlow(SautiWorkspace.CHAT_WORKSPACE)
     val currentWorkspace: StateFlow<SautiWorkspace> = _currentWorkspace.asStateFlow()
 
+    // 2.1 Dynamic Theme State
+    private val _appTheme = MutableStateFlow(prefs.appTheme)
+    val appTheme: StateFlow<com.sauti.app.settings.AppTheme> = _appTheme.asStateFlow()
+
     // 3. Synchronized active conversation session ID
     private val _activeSessionId = MutableStateFlow<String?>(null)
     val activeSessionId: StateFlow<String?> = _activeSessionId.asStateFlow()
 
-    // 4. Live database flow bound directly from SQLite DAO (Oldest first: ORDER BY timestamp ASC)
+    // 4. Live database flow bound directly from SQLite DAO (Newest first: ORDER BY timestamp DESC)
     val chatSessions: StateFlow<List<ChatSession>> = chatSessionDao.getAllSessions()
         .stateIn(
             scope = viewModelScope,
@@ -95,14 +99,14 @@ class SautiNavigationViewModel(
     )
 
     init {
-        // Ensure at least one session exists or is created on startup
+        // Ensure at least one session exists on startup without overriding user selection
         viewModelScope.launch {
-            chatSessions.collect { list ->
-                if (list.isEmpty()) {
-                    createNewSession()
-                } else if (_activeSessionId.value == null) {
-                    _activeSessionId.value = list.last().id
-                }
+            val existing = chatSessionDao.getAllSessions().first()
+            if (existing.isEmpty()) {
+                createNewSession()
+            } else if (_activeSessionId.value == null) {
+                // Default to newest session on fresh app start
+                _activeSessionId.value = existing.first().id
             }
         }
     }
@@ -117,6 +121,11 @@ class SautiNavigationViewModel(
         val clean = instructions.trim()
         prefs.customInstructions = clean
         _userProfile.value = _userProfile.value.copy(customInstructions = clean)
+    }
+
+    fun updateTheme(theme: com.sauti.app.settings.AppTheme) {
+        prefs.appTheme = theme
+        _appTheme.value = theme
     }
 
     fun selectWorkspace(workspace: SautiWorkspace) {
