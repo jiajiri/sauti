@@ -17,16 +17,17 @@ enum class VoicePersona(
     val personaName: String,
     val pitch: Float,
     val speechRate: Float,
-    val description: String
+    val description: String,
+    val genderPreference: String = "neutral"
 ) {
-    MAWIMBI("Mawimbi", 1.02f, 0.94f, "Warm, flowing, natural conversational East African cadence"),
-    NGURUMO("Ngurumo", 0.88f, 0.88f, "Deep, grounded, authoritative broadcast-quality voice"),
-    MWANGA("Mwanga", 1.15f, 0.98f, "Bright, crisp, energetic modern voice")
+    MAWIMBI("Mawimbi", 1.0f, 0.95f, "Warm, flowing, natural conversational East African cadence", "female"),
+    NGURUMO("Ngurumo", 0.72f, 0.86f, "Deep, grounded, authoritative broadcast-quality baritone voice", "male"),
+    MWANGA("Mwanga", 1.32f, 1.08f, "Bright, crisp, energetic modern voice", "female")
 }
 
 /**
  * 100% Offline Sovereign Text-To-Speech Engine.
- * Dynamically shapes acoustic profiles (Pitch, Rate, Pronunciation) across all 3 personas
+ * Dynamically shapes acoustic profiles (Pitch, Rate, Pronunciation, Voice Selection) across all 3 personas
  * ensuring crystal-clear playback on physical devices and emulators without network calls.
  */
 class TextToSpeechEngine(
@@ -49,6 +50,38 @@ class TextToSpeechEngine(
     private fun applyPersonaParameters(persona: VoicePersona) {
         tts?.setPitch(persona.pitch)
         tts?.setSpeechRate(persona.speechRate)
+
+        // Try to match specific available voice in system TTS engine if available
+        try {
+            val availableVoices = tts?.voices
+            if (!availableVoices.isNullOrEmpty()) {
+                val matchedVoice = when (persona) {
+                    VoicePersona.NGURUMO -> {
+                        availableVoices.firstOrNull { 
+                            it.name.contains("male", ignoreCase = true) || 
+                            it.name.contains("low", ignoreCase = true) ||
+                            it.name.contains("deep", ignoreCase = true)
+                        } ?: availableVoices.firstOrNull { it.quality >= android.speech.tts.Voice.QUALITY_NORMAL }
+                    }
+                    VoicePersona.MWANGA -> {
+                        availableVoices.firstOrNull { 
+                            it.name.contains("female", ignoreCase = true) || 
+                            it.name.contains("high", ignoreCase = true)
+                        } ?: availableVoices.lastOrNull()
+                    }
+                    VoicePersona.MAWIMBI -> {
+                        availableVoices.firstOrNull { 
+                            it.locale.language.startsWith("sw")
+                        } ?: availableVoices.firstOrNull()
+                    }
+                }
+                if (matchedVoice != null) {
+                    tts?.voice = matchedVoice
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Voice selection fallback: ${e.message}")
+        }
     }
 
     override fun onInit(status: Int) {

@@ -88,6 +88,19 @@ class MainActivity : ComponentActivity() {
         powerManager = PowerHardwareManager(this)
         audioRecorderManager = AudioRecorderManager(this)
 
+        // Request runtime microphone permission if not granted so device audio recording works
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.RECORD_AUDIO
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            androidx.core.app.ActivityCompat.requestPermissions(
+                this,
+                arrayOf(android.Manifest.permission.RECORD_AUDIO),
+                101
+            )
+        }
+
         val sautiDb = SautiDatabase.getInstance(this)
         val prefs = com.sauti.app.settings.SautiPreferencesStore(this)
 
@@ -321,7 +334,7 @@ fun SautiMainApp(
                         }
                     }
 
-                    // Persistent Bottom Footer (Reference 3)
+                    // Persistent Bottom Footer: User Avatar on Left, New Chat Button on Right (No Sound Icon)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -329,7 +342,48 @@ fun SautiMainApp(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        // Left: Primary Blue "New Chat" Pill Button (Reference 3)
+                        // Left: Circular User Initials Avatar (Tapping opens Settings)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable {
+                                    viewModel.selectWorkspace(SautiWorkspace.SETTINGS_WORKSPACE)
+                                    coroutineScope.launch { drawerState.close() }
+                                }
+                                .padding(4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFE11D48)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = userProfile.getAvatarInitial(),
+                                    color = TextWhite,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = userProfile.fullName,
+                                    color = TextWhite,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Settings",
+                                    color = TextMuted,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+
+                        // Right: Primary Blue "New Chat" Pill Button
                         Button(
                             onClick = {
                                 viewModel.createNewSession()
@@ -345,47 +399,8 @@ fun SautiMainApp(
                                 tint = TextWhite,
                                 modifier = Modifier.size(18.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Chat", color = TextWhite, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        }
-
-                        // Center: Circular User Initials Avatar (Tapping opens Settings)
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFE11D48))
-                                .clickable {
-                                    viewModel.selectWorkspace(SautiWorkspace.SETTINGS_WORKSPACE)
-                                    coroutineScope.launch { drawerState.close() }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = userProfile.getAvatarInitial(),
-                                color = TextWhite,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        // Right: Circular Waveform Icon Button (Reference 3)
-                        IconButton(
-                            onClick = {
-                                viewModel.selectWorkspace(SautiWorkspace.AUDIO_WORKSPACE)
-                                coroutineScope.launch { drawerState.close() }
-                            },
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(WaveformBtnBg)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.GraphicEq,
-                                contentDescription = "Audio Mode",
-                                tint = TextWhite,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("New chat", color = TextWhite, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }

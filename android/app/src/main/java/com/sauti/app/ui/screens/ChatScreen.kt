@@ -13,6 +13,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -73,6 +75,7 @@ fun ChatScreen(
     val activeSessionId by viewModel?.activeSessionId?.collectAsState() ?: remember { mutableStateOf(null) }
     val activeSessionTitle by viewModel?.activeSessionTitle?.collectAsState() ?: remember { mutableStateOf("New Chat") }
     val persistedMessages by viewModel?.activeMessages?.collectAsState() ?: remember { mutableStateOf(emptyList<com.sauti.app.data.local.ChatMessage>()) }
+    val userProfile by viewModel?.userProfile?.collectAsState() ?: remember { mutableStateOf(com.sauti.app.data.model.UserProfile("User")) }
 
     var streamingMessage by remember { mutableStateOf<ConversationalMessage?>(null) }
     var inputMessage by remember { mutableStateOf("") }
@@ -307,17 +310,23 @@ fun ChatScreen(
                     }
                 }
 
-                // Far-Right Circular Blue Live-Waveform Button (Reference 6)
+                // Far-Right Circular Blue Send Arrow Button (Reference: user request)
                 IconButton(
-                    onClick = onVoiceClick,
+                    onClick = {
+                        if (inputMessage.isNotBlank()) {
+                            submitPrompt(inputMessage)
+                        } else {
+                            onVoiceClick()
+                        }
+                    },
                     modifier = Modifier
                         .size(54.dp)
                         .clip(CircleShape)
                         .background(AccentBlue)
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.GraphicEq,
-                        contentDescription = "Live Voice Mode",
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
+                        contentDescription = "Send message",
                         tint = TextWhite,
                         modifier = Modifier.size(24.dp)
                     )
@@ -331,7 +340,7 @@ fun ChatScreen(
                 .padding(innerPadding)
         ) {
             if (displayMessages.isEmpty()) {
-                // ── Empty State Centerpiece (Reference 6) ─────────────────────────
+                // ── Warm Personalized Welcome Centerpiece ─────────────────────────
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -339,69 +348,53 @@ fun ChatScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
+                    val firstName = userProfile.fullName.trim().split("\\s+".toRegex()).firstOrNull { it.isNotEmpty() } ?: "there"
                     Text(
-                        text = "Put Sauti to work",
+                        text = "Hello, $firstName",
                         color = TextWhite,
-                        fontSize = 24.sp,
+                        fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.5).sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "What can I help you explore today?",
+                        color = TextMuted,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal
                     )
 
                     Spacer(modifier = Modifier.height(28.dp))
 
-                    // Row 1: Staggered horizontal scrolling chips
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        SuggestionChipItem(
-                            icon = Icons.Outlined.Translate,
-                            label = "Practice Swahili",
-                            onClick = { submitPrompt("Hujambo Sauti, tuongee kwa Kiswahili fasaha kuhusu siku yangu.") }
-                        )
-                        SuggestionChipItem(
-                            icon = Icons.Outlined.Place,
-                            label = "Plan my weekend",
-                            onClick = { submitPrompt("Nipe mpango mzuri wa kutumia wikendi yangu kwa utulivu.") }
-                        )
-                        SuggestionChipItem(
-                            icon = Icons.Outlined.MusicNote,
-                            label = "Stories & culture",
-                            onClick = { submitPrompt("Niambie hadithi ya kusisimua kuhusu utamaduni wa pwani.") }
-                        )
-                    }
+                    // Row 1: Smooth Infinite Scrolling Chips (Drifting Left)
+                    AutoScrollingChipRow(
+                        items = listOf(
+                            Triple(Icons.Outlined.Translate, "Learn Swahili", "Hujambo Sauti, nifundishe misemo ya kawaida ya Kiswahili kwa urahisi."),
+                            Triple(Icons.Outlined.Create, "Create poem", "Nitungie shairi zuri lenye vina kuhusu amani na upendo."),
+                            Triple(Icons.Outlined.Lightbulb, "Brainstorm ideas", "Nipe mawazo mapya ya kuanzisha mradi mdogo wa kidijitali."),
+                            Triple(Icons.Outlined.MusicNote, "Stories & folklore", "Niambie hadithi fupi ya kusisimua ya utamaduni wa pwani.")
+                        ),
+                        scrollDirection = 1, // Drifting left
+                        onItemClick = { submitPrompt(it) }
+                    )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    // Row 2: Staggered horizontal scrolling chips
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        SuggestionChipItem(
-                            icon = Icons.Outlined.Description,
-                            label = "Draft a document",
-                            onClick = { submitPrompt("Andika barua rasmi ya kuomba kazi kwa lugha ya kitaalamu.") }
-                        )
-                        SuggestionChipItem(
-                            icon = Icons.Outlined.Summarize,
-                            label = "Summarize text",
-                            onClick = { submitPrompt("Fafanua kwa ufupi mambo makuu ya kuzingatia unapoanza biashara.") }
-                        )
-                        SuggestionChipItem(
-                            icon = Icons.Outlined.Code,
-                            label = "Write code",
-                            onClick = { submitPrompt("Andika function ya Python inayopanga data haraka.") }
-                        )
-                    }
+                    // Row 2: Smooth Infinite Scrolling Chips (Drifting Right)
+                    AutoScrollingChipRow(
+                        items = listOf(
+                            Triple(Icons.Outlined.Code, "Write code", "Andika function ya Python inayopanga data haraka."),
+                            Triple(Icons.Outlined.Description, "Draft document", "Andika barua rasmi ya kuomba kazi kwa lugha ya kitaalamu."),
+                            Triple(Icons.Outlined.Summarize, "Summarize notes", "Fafanua kwa ufupi mambo makuu ya kuzingatia unapoanza biashara."),
+                            Triple(Icons.Outlined.Psychology, "Quick advice", "Nipe ushauri mzuri wa kupanga muda wangu wa siku.")
+                        ),
+                        scrollDirection = -1, // Drifting right
+                        onItemClick = { submitPrompt(it) }
+                    )
 
                     Spacer(modifier = Modifier.height(28.dp))
 
-                    // Centered High-Contrast White Pill CTA Button (Reference 6)
+                    // Centered High-Contrast White Pill CTA Button
                     Button(
                         onClick = { submitPrompt("Niambie jinsi unavyoweza kunisaidia leo kama msaidizi wa kibinafsi.") },
                         shape = RoundedCornerShape(24.dp),
@@ -412,7 +405,7 @@ fun ChatScreen(
                         contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
                     ) {
                         Text(
-                            text = "Pick a task",
+                            text = "Explore tasks",
                             color = Color.Black,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
@@ -474,6 +467,67 @@ private fun SuggestionChipItem(
     }
 }
 
+/**
+ * Infinite looping chip row that slowly and continuously drifts horizontally,
+ * while allowing individual items to remain clickable.
+ */
+@Composable
+private fun AutoScrollingChipRow(
+    items: List<Triple<androidx.compose.ui.graphics.vector.ImageVector, String, String>>,
+    scrollDirection: Int, // 1 for drifting left, -1 for drifting right
+    onItemClick: (String) -> Unit
+) {
+    val scrollState = rememberScrollState()
+
+    // Infinite gentle continuous drifting animation loop
+    LaunchedEffect(scrollDirection) {
+        val initialScroll = if (scrollDirection < 0) 3000 else 0
+        if (scrollDirection < 0) {
+            scrollState.scrollTo(initialScroll)
+        }
+        while (true) {
+            val target = if (scrollDirection > 0) {
+                (scrollState.value + 400).coerceAtMost(scrollState.maxValue)
+            } else {
+                (scrollState.value - 400).coerceAtLeast(0)
+            }
+
+            if (scrollDirection > 0 && scrollState.value >= scrollState.maxValue - 10) {
+                scrollState.scrollTo(0)
+            } else if (scrollDirection < 0 && scrollState.value <= 10) {
+                scrollState.scrollTo(scrollState.maxValue)
+            } else {
+                scrollState.animateScrollTo(
+                    value = target,
+                    animationSpec = androidx.compose.animation.core.tween(
+                        durationMillis = 3500,
+                        easing = androidx.compose.animation.core.LinearEasing
+                    )
+                )
+            }
+            kotlinx.coroutines.delay(10)
+        }
+    }
+
+    // Multiply items so the row has plenty of repeating content to loop smoothly
+    val repeatedItems = remember(items) { items + items + items + items }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(scrollState),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        repeatedItems.forEach { (icon, label, prompt) ->
+            SuggestionChipItem(
+                icon = icon,
+                label = label,
+                onClick = { onItemClick(prompt) }
+            )
+        }
+    }
+}
+
 @Composable
 private fun MessageBubbleRow(
     message: ConversationalMessage,
@@ -523,7 +577,7 @@ private fun MessageBubbleRow(
                             modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.VolumeUp,
+                                imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
                                 contentDescription = "Read aloud",
                                 tint = TextMuted,
                                 modifier = Modifier.size(16.dp)
