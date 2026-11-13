@@ -28,7 +28,7 @@ class ModelDownloadWorker(
 
     companion object {
         const val WORK_NAME = "sauti_model_sync_work"
-        private const val MANIFEST_URL = "https://assets.sauti.ai/models/v1/manifest.json"
+        private const val MANIFEST_URL = "https://cdn.sauti.ai/models/latest/manifest.json"
 
         fun schedule(context: Context) {
             val constraints = Constraints.Builder()
@@ -72,25 +72,21 @@ class ModelDownloadWorker(
 
                 val body = response.body?.string() ?: return Result.retry()
                 val json = JSONObject(body)
-                val models = json.optJSONObject("models") ?: return Result.failure()
+                val modelsArray = json.optJSONArray("models")
 
-                // Download and decrypt voice model if needed
-                if (!voiceFile.exists() || voiceFile.length() < 1024 * 1024) {
-                    val voiceJson = models.optJSONObject("voice_lite")
-                    val voiceUrl = voiceJson?.optString("url")
-                    if (!voiceUrl.isNullOrEmpty()) {
-                        Log.i(TAG, "Downloading encrypted voice model from CDN...")
-                        downloadAndDecrypt(voiceUrl, voiceFile, key)
-                    }
-                }
+                if (modelsArray != null) {
+                    for (i in 0 until modelsArray.length()) {
+                        val mObj = modelsArray.getJSONObject(i)
+                        val id = mObj.optString("id")
+                        val filename = mObj.optString("filename")
+                        val remoteUrl = mObj.optString("remote_url")
+                        val isCompressed = mObj.optBoolean("compressed", false)
+                        val targetFile = File(sautiDir, filename)
 
-                // Download and decrypt core model if needed
-                if (!coreFile.exists() || coreFile.length() < 1024 * 1024) {
-                    val coreJson = models.optJSONObject("core_lite")
-                    val coreUrl = coreJson?.optString("url")
-                    if (!coreUrl.isNullOrEmpty()) {
-                        Log.i(TAG, "Downloading encrypted core model from CDN...")
-                        downloadAndDecrypt(coreUrl, coreFile, key)
+                        if (!targetFile.exists() || targetFile.length() < 1024 * 1024) {
+                            Log.i(TAG, "Downloading model '$id' from: $remoteUrl (compressed=$isCompressed)")
+                            downloadAndDecrypt(remoteUrl, targetFile, key, isCompressed)
+                        }
                     }
                 }
             }
@@ -103,12 +99,17 @@ class ModelDownloadWorker(
         }
     }
 
-    private fun downloadAndDecrypt(url: String, targetFile: File, key: javax.crypto.SecretKey) {
+    private fun downloadAndDecrypt(
+        url: String,
+        targetFile: File,
+        key: javax.crypto.SecretKey,
+        isCompressed: Boolean = false
+    ) {
         val request = Request.Builder().url(url).build()
         client.newCall(request).execute().use { response ->
             if (response.isSuccessful) {
                 response.body?.byteStream()?.use { stream ->
-                    val success = ModelCryptoManager.decryptStream(stream, targetFile, key)
+                    val success = ModelCryptoManager.decryptStream(stream, targetFile, key, isCompressed)
                     Log.i(TAG, "Model decrypted into ${targetFile.name}: success=$success (${targetFile.length()} bytes)")
                 }
             }

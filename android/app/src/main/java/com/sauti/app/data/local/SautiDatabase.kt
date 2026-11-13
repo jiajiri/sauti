@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
 class SautiDatabase private constructor(context: Context) {
 
     private val dbHelper = SautiDbOpenHelper(context.applicationContext)
-    private val dao = SQLiteChatSessionDao(dbHelper)
+    private val dao = SQLiteChatSessionDao(context.applicationContext, dbHelper)
 
     fun chatSessionDao(): ChatSessionDao = dao
 
@@ -82,7 +82,10 @@ private class SautiDbOpenHelper(context: Context) : SQLiteOpenHelper(context, "s
     }
 }
 
-private class SQLiteChatSessionDao(private val dbHelper: SautiDbOpenHelper) : ChatSessionDao {
+private class SQLiteChatSessionDao(
+    private val context: Context,
+    private val dbHelper: SautiDbOpenHelper
+) : ChatSessionDao {
     private val _sessionsFlow = MutableStateFlow<List<ChatSession>>(emptyList())
     private val _messagesFlowMap = ConcurrentHashMap<String, MutableStateFlow<List<ChatMessage>>>()
 
@@ -108,10 +111,11 @@ private class SQLiteChatSessionDao(private val dbHelper: SautiDbOpenHelper) : Ch
                 val titleIdx = it.getColumnIndexOrThrow("title")
                 val tsIdx = it.getColumnIndexOrThrow("timestamp")
                 while (it.moveToNext()) {
+                    val rawTitle = it.getString(titleIdx)
                     list.add(
                         ChatSession(
                             id = it.getString(idIdx),
-                            title = it.getString(titleIdx),
+                            title = com.sauti.app.security.FieldCryptoHelper.decrypt(context, rawTitle),
                             timestamp = it.getLong(tsIdx)
                         )
                     )
@@ -144,12 +148,13 @@ private class SQLiteChatSessionDao(private val dbHelper: SautiDbOpenHelper) : Ch
                 val tpsIdx = it.getColumnIndexOrThrow("tokensPerSec")
                 val tsIdx = it.getColumnIndexOrThrow("timestamp")
                 while (it.moveToNext()) {
+                    val rawText = it.getString(textIdx)
                     list.add(
                         ChatMessage(
                             id = it.getString(idIdx),
                             sessionId = it.getString(sIdIdx),
                             isUser = it.getInt(userIdx) == 1,
-                            text = it.getString(textIdx),
+                            text = com.sauti.app.security.FieldCryptoHelper.decrypt(context, rawText),
                             tokensPerSec = it.getString(tpsIdx),
                             timestamp = it.getLong(tsIdx)
                         )
@@ -170,7 +175,7 @@ private class SQLiteChatSessionDao(private val dbHelper: SautiDbOpenHelper) : Ch
             val db = dbHelper.writableDatabase
             val values = ContentValues().apply {
                 put("id", session.id)
-                put("title", session.title)
+                put("title", com.sauti.app.security.FieldCryptoHelper.encrypt(context, session.title))
                 put("timestamp", session.timestamp)
             }
             db.insertWithOnConflict("chat_sessions", null, values, SQLiteDatabase.CONFLICT_REPLACE)
@@ -199,7 +204,9 @@ private class SQLiteChatSessionDao(private val dbHelper: SautiDbOpenHelper) : Ch
     override suspend fun updateTitle(sessionId: String, newTitle: String) = withContext(Dispatchers.IO) {
         try {
             val db = dbHelper.writableDatabase
-            val values = ContentValues().apply { put("title", newTitle) }
+            val values = ContentValues().apply {
+                put("title", com.sauti.app.security.FieldCryptoHelper.encrypt(context, newTitle))
+            }
             db.update("chat_sessions", values, "id = ?", arrayOf(sessionId))
             refreshSessions()
         } catch (e: Exception) {
@@ -220,7 +227,7 @@ private class SQLiteChatSessionDao(private val dbHelper: SautiDbOpenHelper) : Ch
                 put("id", message.id)
                 put("sessionId", message.sessionId)
                 put("isUser", if (message.isUser) 1 else 0)
-                put("text", message.text)
+                put("text", com.sauti.app.security.FieldCryptoHelper.encrypt(context, message.text))
                 put("tokensPerSec", message.tokensPerSec)
                 put("timestamp", message.timestamp)
             }
