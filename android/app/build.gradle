@@ -128,6 +128,10 @@ dependencies {
     // Dokka KDoc Documentation Engine
     dokkaHtmlPlugin 'org.jetbrains.dokka:android-documentation-plugin:1.9.20'
 
+    // Unit Testing
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0'
+
     // Showkase Interactive UI Component Browser (Airbnb)
     implementation 'com.airbnb.android:showkase:1.0.3'
     ksp 'com.airbnb.android:showkase-processor:1.0.3'

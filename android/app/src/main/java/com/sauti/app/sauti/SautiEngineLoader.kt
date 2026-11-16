@@ -109,7 +109,8 @@ object SautiEngineLoader {
 
     /**
      * Verifies and links models in private application storage for zero-copy mmap.
-     * If models are not yet downloaded, triggers background WorkManager fetch while falling back safely.
+     * If models are not yet downloaded, scans offline directories (/sdcard/Download, external dirs)
+     * before falling back to background WorkManager fetch.
      */
     fun ensureAssetsRegistered(context: Context): Pair<String, String> {
         val sautiDir = File(context.filesDir, "sauti")
@@ -117,7 +118,10 @@ object SautiEngineLoader {
             sautiDir.mkdirs()
         }
 
-        // Schedule background model sync
+        // 1. Scan external offline storage directories for pre-loaded models
+        scanAndImportOfflineModels(context, sautiDir)
+
+        // 2. Schedule background model sync (will safely succeed or be no-op if offline)
         try {
             com.sauti.app.sync.ModelDownloadWorker.schedule(context)
         } catch (e: Throwable) {
@@ -148,16 +152,142 @@ object SautiEngineLoader {
 
         try {
             if (voiceFile.exists() && voiceFile.length() > 1024 * 1024) {
+                Log.i(TAG, "Initializing native voice engine with: ${voiceFile.absolutePath} (${voiceFile.length()} bytes)")
                 nativeInitVoiceEngine(sautiVoicePath!!)
+            } else {
+                Log.w(TAG, "Voice model not yet ready at ${voiceFile.absolutePath}")
             }
             if (coreFile.exists() && coreFile.length() > 1024 * 1024) {
+                Log.i(TAG, "Initializing native core engine with: ${coreFile.absolutePath} (${coreFile.length()} bytes)")
                 nativeInitCoreEngine(sautiCorePath!!)
+            } else {
+                Log.w(TAG, "Core language model not yet ready at ${coreFile.absolutePath}")
             }
         } catch (e: Throwable) {
             Log.w(TAG, "Native engine init: " + e.message)
         }
 
         return Pair(sautiVoicePath!!, sautiCorePath!!)
+    }
+
+    /**
+     * Auto-discovers offline model files placed on phone storage:
+     * - /sdcard/Download/sauti_models/
+     * - /sdcard/Download/
+     * - /sdcard/sauti/
+     * - context.getExternalFilesDir("models")
+     *
+     * Once imported into internal private storage, original public files are automatically deleted
+     * to protect model assets from unauthorized extraction or copying.
+     */
+    private fun scanAndImportOfflineModels(context: Context, sautiDir: File) {
+        val targetVoice = File(sautiDir, "voice_lite.bin")
+        val targetCore = File(sautiDir, "core_pro.bin")
+
+        val searchDirs = listOfNotNull(
+            File("/sdcard/Download/sauti_models"),
+            File("/sdcard/Download"),
+            File("/sdcard/sauti"),
+            context.getExternalFilesDir("models"),
+            context.getExternalFilesDir(null)
+        )
+
+        for (dir in searchDirs) {
+            if (!dir.exists() || !dir.isDirectory) continue
+
+            val files = dir.listFiles() ?: continue
+            for (file in files) {
+                if (!file.isFile || file.length() < 1024 * 1024) continue
+
+                val isGGUF = isGgufFile(file)
+                val isWhisper = isWhisperBinary(file)
+
+                // 1. Language Reasoning Core: GGUF Model -> core_pro.bin
+                if ((!targetCore.exists() || targetCore.length() < 1024 * 1024) && isGGUF) {
+                    Log.i(TAG, "Discovered offline core model: ${file.name} -> importing to secure sandbox")
+                    if (copyAndCleanSource(file, targetCore)) {
+                        Log.i(TAG, "Securely installed core model into private sandbox")
+                    }
+                    continue
+                }
+
+                // 2. Acoustic Voice Model: Whisper Binary -> voice_lite.bin
+                if ((!targetVoice.exists() || targetVoice.length() < 1024 * 1024) && isWhisper) {
+                    Log.i(TAG, "Discovered offline voice model: ${file.name} -> importing to secure sandbox")
+                    if (copyAndCleanSource(file, targetVoice)) {
+                        Log.i(TAG, "Securely installed voice model into private sandbox")
+                    }
+                    continue
+                }
+            }
+        }
+    }
+
+    /**
+     * Inspects the first 4 bytes of a file to check for GGUF magic header (0x46554747 -> "GGUF").
+     */
+    private fun isGgufFile(file: File): Boolean {
+        if (file.name.endsWith(".gguf", ignoreCase = true)) return true
+        return try {
+            file.inputStream().use { input ->
+                val magic = ByteArray(4)
+                if (input.read(magic) == 4) {
+                    magic[0] == 'G'.code.toByte() &&
+                    magic[1] == 'G'.code.toByte() &&
+                    magic[2] == 'U'.code.toByte() &&
+                    magic[3] == 'F'.code.toByte()
+                } else false
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Inspects binary structure or naming for whisper acoustic models.
+     */
+    private fun isWhisperBinary(file: File): Boolean {
+        val name = file.name.lowercase()
+        if (name == "voice_lite.bin" || name.contains("whisper") || name.contains("ggml-base")) return true
+        if (name.endsWith(".bin") && !name.contains("core") && !name.contains("gemma")) return true
+        return false
+    }
+
+    /**
+     * Copies the source file into the private internal app sandbox and deletes the exposed public file.
+     */
+    private fun copyAndCleanSource(src: File, dst: File): Boolean {
+        return try {
+            val tmp = File(dst.parentFile, "${dst.name}.tmp")
+            src.inputStream().use { input ->
+                tmp.outputStream().use { output ->
+                    input.copyTo(output, bufferSize = 256 * 1024)
+                }
+            }
+            if (tmp.exists() && tmp.length() == src.length()) {
+                if (dst.exists()) dst.delete()
+                val renamed = tmp.renameTo(dst)
+                if (renamed) {
+                    // Clean up source file from public SDCard so it cannot be copied by other apps
+                    try {
+                        src.delete()
+                        Log.i(TAG, "Cleaned up source file from public storage: ${src.absolutePath}")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Could not delete public source file: ${e.message}")
+                    }
+                    true
+                } else {
+                    tmp.delete()
+                    false
+                }
+            } else {
+                tmp.delete()
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error importing offline model: ${e.message}")
+            false
+        }
     }
 
     private fun copyAssetToFile(context: Context, assetPath: String, destFile: File) {
