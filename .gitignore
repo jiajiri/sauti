@@ -42,3 +42,8 @@ local.properties
 # Python bytecode and cache
 __pycache__/
 *.py[cod]
+
+# Private grant and competition proposals (never commit to git)
+docs/private_grants/
+*.private.md
+

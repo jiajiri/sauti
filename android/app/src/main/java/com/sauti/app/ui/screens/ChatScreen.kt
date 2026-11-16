@@ -558,22 +558,12 @@ internal fun MessageBubbleRow(
                 )
 
                 if (!message.isUser && message.text.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (message.tokensPerSec.isNotBlank()) {
-                            Text(
-                                text = message.tokensPerSec,
-                                color = TextMuted,
-                                fontSize = 11.sp
-                            )
-                        } else {
-                            Spacer(modifier = Modifier.width(1.dp))
-                        }
-
                         IconButton(
                             onClick = onSpeakClick,
                             modifier = Modifier.size(24.dp)
