@@ -147,6 +147,11 @@ fun SautiMainApp(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
 
+    var showExploreSheet by remember { mutableStateOf(false) }
+    var sessionToRename by remember { mutableStateOf<ChatSession?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    var sessionToDelete by remember { mutableStateOf<ChatSession?>(null) }
+
     // Native Android Back gesture & button handling:
     androidx.activity.compose.BackHandler(enabled = drawerState.isOpen) {
         coroutineScope.launch { drawerState.close() }
@@ -162,18 +167,21 @@ fun SautiMainApp(
         }
     }
 
+    val colors = MaterialTheme.colorScheme
+    val isLight = colors.background.red > 0.5f
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         gesturesEnabled = true,
         drawerContent = {
             ModalDrawerSheet(
-                drawerContainerColor = DrawerCanvasBg,
+                drawerContainerColor = colors.surface,
                 drawerShape = RoundedCornerShape(topEnd = 0.dp, bottomEnd = 0.dp),
                 modifier = Modifier
                     .width(320.dp)
                     .fillMaxHeight()
             ) {
-                // ── Sauti Navigation Drawer (Reference 3) ─────────────────────────
+                // ── Sauti Navigation Drawer ───────────────────────────────────────
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -181,7 +189,7 @@ fun SautiMainApp(
                         .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    // Top Search Bar & Options Trigger (Reference 3)
+                    // Top Search Bar & Options Trigger
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -189,7 +197,7 @@ fun SautiMainApp(
                     ) {
                         Surface(
                             shape = RoundedCornerShape(24.dp),
-                            color = SearchPillBg,
+                            color = colors.surfaceVariant,
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp)
@@ -204,12 +212,12 @@ fun SautiMainApp(
                                 Icon(
                                     imageVector = Icons.Outlined.Search,
                                     contentDescription = "Search",
-                                    tint = TextMuted,
+                                    tint = colors.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Text(
                                     text = "Search",
-                                    color = TextMuted,
+                                    color = colors.onSurfaceVariant,
                                     fontSize = 15.sp,
                                     modifier = Modifier.weight(1f)
                                 )
@@ -223,25 +231,15 @@ fun SautiMainApp(
                             Icon(
                                 imageVector = Icons.Outlined.MoreVert,
                                 contentDescription = "Options",
-                                tint = TextWhite
+                                tint = colors.onSurface
                             )
                         }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Workspace Section (Reference 3)
+                    // Workspace Section
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        DrawerWorkspaceItem(
-                            icon = Icons.Outlined.GraphicEq,
-                            label = "Audio Mode",
-                            isSelected = currentWorkspace == SautiWorkspace.AUDIO_WORKSPACE,
-                            onClick = {
-                                viewModel.selectWorkspace(SautiWorkspace.AUDIO_WORKSPACE)
-                                coroutineScope.launch { drawerState.close() }
-                            }
-                        )
-
                         DrawerWorkspaceItem(
                             icon = Icons.Outlined.GridView,
                             label = "Library",
@@ -265,7 +263,7 @@ fun SautiMainApp(
                         DrawerWorkspaceItem(
                             icon = Icons.Outlined.Tune,
                             label = "Customize Sauti",
-                            isSelected = false,
+                            isSelected = currentWorkspace == SautiWorkspace.SETTINGS_WORKSPACE,
                             onClick = {
                                 viewModel.selectWorkspace(SautiWorkspace.SETTINGS_WORKSPACE)
                                 coroutineScope.launch { drawerState.close() }
@@ -276,65 +274,136 @@ fun SautiMainApp(
                             icon = Icons.Outlined.Explore,
                             label = "Explore Tasks",
                             isSelected = false,
-                            onClick = { /* Explore */ }
+                            onClick = {
+                                coroutineScope.launch { drawerState.close() }
+                                showExploreSheet = true
+                            }
                         )
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
-                    HorizontalDivider(color = Color(0xFF262626), thickness = 0.5.dp)
+                    HorizontalDivider(color = colors.outline, thickness = 0.5.dp)
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Dynamic Conversation History with Highlighted Active Row (Reference 3)
-                    LazyColumn(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(items = chatSessions, key = { it.id }) { session ->
-                            val isCurrent = session.id == activeSessionId &&
-                                    currentWorkspace == SautiWorkspace.CHAT_WORKSPACE
+                    // Dynamic Conversation History with Options (Rename & Delete)
+                    if (chatSessions.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No previous conversations",
+                                color = colors.onSurfaceVariant,
+                                fontSize = 13.sp
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(items = chatSessions, key = { it.id }) { session ->
+                                val isCurrent = session.id == activeSessionId &&
+                                        currentWorkspace == SautiWorkspace.CHAT_WORKSPACE
+                                var showSessionMenu by remember { mutableStateOf(false) }
 
-                            Surface(
-                                onClick = {
-                                    viewModel.selectSession(session.id)
-                                    coroutineScope.launch { drawerState.close() }
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (isCurrent) ActiveRowBg else Color.Transparent,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(42.dp)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 14.dp)
+                                Surface(
+                                    onClick = {
+                                        viewModel.selectSession(session.id)
+                                        coroutineScope.launch { drawerState.close() }
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (isCurrent) colors.surfaceVariant else Color.Transparent,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(42.dp)
                                 ) {
-                                    Text(
-                                        text = session.title,
-                                        color = if (isCurrent) TextWhite else TextMuted,
-                                        fontSize = 14.sp,
-                                        fontWeight = if (isCurrent) FontWeight.Medium else FontWeight.Normal,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(start = 14.dp, end = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = session.title,
+                                            color = if (isCurrent) colors.onSurface else colors.onSurfaceVariant,
+                                            fontSize = 14.sp,
+                                            fontWeight = if (isCurrent) FontWeight.Medium else FontWeight.Normal,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
+
+                                        Box {
+                                            IconButton(
+                                                onClick = { showSessionMenu = true },
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.MoreVert,
+                                                    contentDescription = "Session options",
+                                                    tint = if (isCurrent) colors.onSurface else colors.onSurfaceVariant,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+
+                                            DropdownMenu(
+                                                expanded = showSessionMenu,
+                                                onDismissRequest = { showSessionMenu = false }
+                                            ) {
+                                                DropdownMenuItem(
+                                                    text = { Text("Rename", color = colors.onSurface, fontSize = 14.sp) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.Edit,
+                                                            contentDescription = null,
+                                                            tint = colors.primary,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showSessionMenu = false
+                                                        renameText = session.title
+                                                        sessionToRename = session
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Delete", color = Color(0xFFEF4444), fontSize = 14.sp) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.DeleteOutline,
+                                                            contentDescription = null,
+                                                            tint = Color(0xFFEF4444),
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showSessionMenu = false
+                                                        sessionToDelete = session
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        }
 
-                        item {
-                            Text(
-                                text = "See all...",
-                                color = TextMuted,
-                                fontSize = 13.sp,
-                                modifier = Modifier
-                                    .padding(horizontal = 14.dp, vertical = 8.dp)
-                                    .clickable { /* Expand all history */ }
-                            )
+                            item {
+                                Text(
+                                    text = "See all...",
+                                    color = colors.onSurfaceVariant,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier
+                                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                                        .clickable { /* Expand all history */ }
+                                )
+                            }
                         }
                     }
 
-                    // Persistent Bottom Footer: User Avatar on Left, New Chat Button on Right (No Sound Icon)
+                    // Persistent Bottom Footer: User Avatar on Left, New Chat Button on Right
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -342,7 +411,7 @@ fun SautiMainApp(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        // Left: Circular User Initials Avatar (Tapping opens Settings)
+                        // Left: Circular User Initials Avatar
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -363,7 +432,7 @@ fun SautiMainApp(
                             ) {
                                 Text(
                                     text = userProfile.getAvatarInitial(),
-                                    color = TextWhite,
+                                    color = Color.White,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -371,13 +440,13 @@ fun SautiMainApp(
                             Column {
                                 Text(
                                     text = userProfile.fullName,
-                                    color = TextWhite,
+                                    color = colors.onSurface,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
                                     text = "Settings",
-                                    color = TextMuted,
+                                    color = colors.onSurfaceVariant,
                                     fontSize = 12.sp
                                 )
                             }
@@ -390,17 +459,17 @@ fun SautiMainApp(
                                 coroutineScope.launch { drawerState.close() }
                             },
                             shape = RoundedCornerShape(24.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                            colors = ButtonDefaults.buttonColors(containerColor = colors.primary),
                             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.Edit,
                                 contentDescription = null,
-                                tint = TextWhite,
+                                tint = Color.White,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("New chat", color = TextWhite, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("New chat", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -409,7 +478,7 @@ fun SautiMainApp(
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = Color.Black
+            color = colors.background
         ) {
             when (currentWorkspace) {
                 SautiWorkspace.CHAT_WORKSPACE -> {
@@ -428,19 +497,21 @@ fun SautiMainApp(
                     )
                 }
                 SautiWorkspace.LIBRARY_WORKSPACE -> {
-                    WorkspacePlaceholderView(
-                        title = "Library Workspace",
-                        subtitle = "Saved code snippets, prompt templates & offline notes",
-                        icon = Icons.Outlined.GridView,
-                        onReturnToChat = { viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE) }
+                    LibraryScreen(
+                        onBack = { viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE) },
+                        onUsePrompt = { prompt ->
+                            viewModel.setPendingPrompt(prompt)
+                            viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE)
+                        }
                     )
                 }
                 SautiWorkspace.NOTEBOOKS_WORKSPACE -> {
-                    WorkspacePlaceholderView(
-                        title = "Notebooks Workspace",
-                        subtitle = "Long-form context workspaces & Swahili document synthesizer",
-                        icon = Icons.Outlined.Folder,
-                        onReturnToChat = { viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE) }
+                    NotebooksScreen(
+                        onBack = { viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE) },
+                        onOpenInChat = { prompt ->
+                            viewModel.setPendingPrompt(prompt)
+                            viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE)
+                        }
                     )
                 }
                 SautiWorkspace.SETTINGS_WORKSPACE -> {
@@ -464,6 +535,95 @@ fun SautiMainApp(
             }
         }
     }
+
+    // Explore Tasks Bottom Sheet
+    if (showExploreSheet) {
+        ExploreTasksBottomSheet(
+            onDismiss = { showExploreSheet = false },
+            onSelectPrompt = { prompt ->
+                showExploreSheet = false
+                viewModel.setPendingPrompt(prompt)
+                viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE)
+            }
+        )
+    }
+
+    // Rename Session Dialog
+    sessionToRename?.let { session ->
+        AlertDialog(
+            onDismissRequest = { sessionToRename = null },
+            containerColor = colors.surface,
+            title = {
+                Text("Rename Conversation", color = colors.onSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = colors.onSurface,
+                        unfocusedTextColor = colors.onSurface,
+                        focusedBorderColor = colors.primary,
+                        unfocusedBorderColor = colors.outline
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (renameText.isNotBlank()) {
+                            viewModel.updateSessionTitle(session.id, renameText.trim())
+                        }
+                        sessionToRename = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.primary)
+                ) {
+                    Text("Rename", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { sessionToRename = null }) {
+                    Text("Cancel", color = colors.onSurfaceVariant)
+                }
+            }
+        )
+    }
+
+    // Delete Session Confirmation Dialog
+    sessionToDelete?.let { session ->
+        AlertDialog(
+            onDismissRequest = { sessionToDelete = null },
+            containerColor = colors.surface,
+            title = {
+                Text("Delete Conversation?", color = colors.onSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "Are you sure you want to delete \"${session.title}\"? This action cannot be undone.",
+                    color = colors.onSurfaceVariant,
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteSession(session.id)
+                        sessionToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
+                ) {
+                    Text("Delete", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { sessionToDelete = null }) {
+                    Text("Cancel", color = colors.onSurfaceVariant)
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -473,10 +633,11 @@ private fun DrawerWorkspaceItem(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+    val colors = MaterialTheme.colorScheme
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
-        color = if (isSelected) ActiveRowBg else Color.Transparent,
+        color = if (isSelected) colors.surfaceVariant else Color.Transparent,
         modifier = Modifier
             .fillMaxWidth()
             .height(44.dp)
@@ -489,14 +650,14 @@ private fun DrawerWorkspaceItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isSelected) TextWhite else TextMuted,
+                tint = if (isSelected) colors.primary else colors.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
             Text(
                 text = label,
-                color = if (isSelected) TextWhite else Color(0xFFD1D5DB),
+                color = if (isSelected) colors.onSurface else colors.onSurfaceVariant,
                 fontSize = 14.sp,
-                fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
             )
         }
     }

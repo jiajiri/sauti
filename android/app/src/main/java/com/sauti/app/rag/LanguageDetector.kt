@@ -40,7 +40,10 @@ object LanguageDetector {
         "ndiyo", "hapana", "si", "siyo", "wala", "zaidi", "kidogo", "sana",
         "swahili", "kiswahili", "sehemu", "sawa", "haya", "poa", "vyema",
         "mimi", "wewe", "yeye", "sisi", "nyinyi", "leo", "kesho", "jana",
-        "vizuri", "bwana", "dada", "kaka", "mama", "baba", "rafiki", "shida"
+        "vizuri", "bwana", "dada", "kaka", "mama", "baba", "rafiki", "shida",
+        "tafsiri", "sarufi", "sentensi", "lugha", "asubuhi", "mchana", "jioni",
+        "usiku", "kueleza", "nisaidie", "ushauri", "muda", "siku", "shairi",
+        "hadithi", "pwani", "amani", "upendo", "biashara", "mradi", "barua", "kazi"
     )
 
     // O(1) HashSet for English functional words, question markers, and common verbs

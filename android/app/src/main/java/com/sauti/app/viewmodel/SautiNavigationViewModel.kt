@@ -69,6 +69,20 @@ class SautiNavigationViewModel(
     private val _activeSessionId = MutableStateFlow<String?>(null)
     val activeSessionId: StateFlow<String?> = _activeSessionId.asStateFlow()
 
+    // Pending prompt to be submitted when navigating to ChatScreen
+    private val _pendingPrompt = MutableStateFlow<String?>(null)
+    val pendingPrompt: StateFlow<String?> = _pendingPrompt.asStateFlow()
+
+    fun setPendingPrompt(prompt: String) {
+        _pendingPrompt.value = prompt
+    }
+
+    fun consumePendingPrompt(): String? {
+        val p = _pendingPrompt.value
+        _pendingPrompt.value = null
+        return p
+    }
+
     // 4. Live database flow bound directly from SQLite DAO (Newest first: ORDER BY timestamp DESC)
     val chatSessions: StateFlow<List<ChatSession>> = chatSessionDao.getAllSessions()
         .stateIn(
@@ -101,20 +115,16 @@ class SautiNavigationViewModel(
     )
 
     init {
-        // Ensure at least one session exists on startup without overriding user selection
         viewModelScope.launch {
             val existing = chatSessionDao.getAllSessions().first()
-            if (existing.isEmpty()) {
-                createNewSession()
-            } else if (_activeSessionId.value == null) {
-                // Default to newest session on fresh app start
+            if (existing.isNotEmpty() && _activeSessionId.value == null) {
                 _activeSessionId.value = existing.first().id
             }
         }
     }
 
     fun updateUserName(name: String) {
-        val clean = name.trim().ifEmpty { "User" }
+        val clean = name.trim().ifEmpty { "Local User" }
         prefs.userName = clean
         _userProfile.value = _userProfile.value.copy(fullName = clean)
     }
@@ -153,9 +163,35 @@ class SautiNavigationViewModel(
         }
     }
 
+    fun getOrCreateActiveSession(initialTitle: String = "New Chat"): String {
+        val current = _activeSessionId.value
+        if (current != null) return current
+        val newId = UUID.randomUUID().toString()
+        val newSession = ChatSession(
+            id = newId,
+            title = initialTitle,
+            timestamp = System.currentTimeMillis()
+        )
+        viewModelScope.launch {
+            chatSessionDao.insert(newSession)
+            _activeSessionId.value = newId
+        }
+        return newId
+    }
+
     fun updateSessionTitle(sessionId: String, title: String) {
         viewModelScope.launch {
             chatSessionDao.updateTitle(sessionId, title)
+        }
+    }
+
+    fun deleteSession(sessionId: String) {
+        viewModelScope.launch {
+            chatSessionDao.deleteById(sessionId)
+            if (_activeSessionId.value == sessionId) {
+                val remaining = chatSessions.value.filter { it.id != sessionId }
+                _activeSessionId.value = remaining.firstOrNull()?.id
+            }
         }
     }
 
@@ -212,7 +248,7 @@ class SautiNavigationViewModel(
 
         val content = buildString {
             append("==========================================\n")
-            append("SAUTI AI - CONVERSATION TRANSCRIPT EXPORT\n")
+            append("SAUTI ASSISTANT / SAUTI MSAIDIZI - TRANSCRIPT EXPORT\n")
             append("Exported: ${sdf.format(Date())}\n")
             append("User: ${userProfile.value.fullName}\n")
             append("==========================================\n\n")
@@ -221,7 +257,7 @@ class SautiNavigationViewModel(
                 append("--- Topic: ${session.title} (${sdf.format(Date(session.timestamp))}) ---\n")
                 val messages = chatSessionDao.getMessagesForSession(session.id).first()
                 for (msg in messages) {
-                    val speaker = if (msg.isUser) "User" else "Sauti AI"
+                    val speaker = if (msg.isUser) "User" else "Sauti Assistant"
                     append("[$speaker - ${sdf.format(Date(msg.timestamp))}]:\n")
                     append(msg.text.trim())
                     append("\n\n")

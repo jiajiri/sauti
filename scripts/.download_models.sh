@@ -33,7 +33,7 @@ else
     echo "[DOWNLOADING] Whisper-Tiny Swahili ASR core (GGML)..."
     curl -L --progress-bar "${WHISPER_URL}" -o "${WHISPER_FILE}"
 fi
-
+ 
 # 2. Qwen2.5 0.5B Instruct (Core Pro)
 if [ -f "${QWEN25_FILE}" ] && [ "$(stat -c%s "${QWEN25_FILE}" 2>/dev/null || stat -f%z "${QWEN25_FILE}" 2>/dev/null)" -gt 100000000 ]; then
     echo "[OK] Qwen2.5-0.5B Core Pro already present ($(du -h "${QWEN25_FILE}" | cut -f1))."

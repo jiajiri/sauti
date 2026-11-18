@@ -18,10 +18,10 @@ Scan this QR code with your phone camera or click the link below to download the
   <a href="https://github.com/jiajiri/sauti/releases/latest"><b>Download Latest APK Release</b></a>
 </p>
 
-- Mobile (Android): Scan the QR code with your camera app, download `sauti-v1.0.0-arm64-v8a-debug.apk`, and tap to install.
+- Mobile (Android): Scan the QR code with your camera app, download `sauti-v1.0.0-arm64-v8a.apk`, and tap to install.
 - Desktop (macOS / Linux / Windows): Scan the QR code directly from your monitor, or download the APK file and install via USB using ADB:
   ```bash
-  adb install -r sauti-v1.0.0-arm64-v8a-debug.apk
+  adb install -r sauti-v1.0.0-arm64-v8a.apk
   ```
 
 ---
@@ -94,16 +94,17 @@ cp .env.example .env
 ### 3. Build the APK
 ```bash
 cd android
-./gradlew assembleDebug
+./gradlew assembleRelease
 ```
 
 Built APKs will be located at:
-- `android/app/build/outputs/apk/debug/sauti-v1.0.0-x86_64-debug.apk` (for emulator)
-- `android/app/build/outputs/apk/debug/sauti-v1.0.0-arm64-v8a-debug.apk` (for ARM devices)
+- `android/app/build/outputs/apk/release/sauti-v1.0.0-x86_64.apk` (for emulator)
+- `android/app/build/outputs/apk/release/sauti-v1.0.0-arm64-v8a.apk` (for physical ARM devices)
+- `android/app/build/outputs/apk/release/sauti-v1.0.0-universal.apk` (universal APK)
 
 ### 4. Install and Run
 ```bash
-adb install -r app/build/outputs/apk/debug/sauti-v1.0.0-x86_64-debug.apk
+adb install -r app/build/outputs/apk/release/sauti-v1.0.0-x86_64.apk
 adb shell am start -n com.sauti.app/com.sauti.app.MainActivity
 ```
 

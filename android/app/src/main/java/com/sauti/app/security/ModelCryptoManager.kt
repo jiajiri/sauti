@@ -33,11 +33,14 @@ object ModelCryptoManager {
     private const val GCM_TAG_LENGTH = 128
     private const val GCM_IV_LENGTH = 12
 
-    // Derive deterministic 256-bit key from app master identity + salt
+    // Derive deterministic 256-bit key matching Sauti Cloudflare R2 MLOps pipeline
     fun deriveAppKey(context: Context): SecretKey {
-        val seed = "${context.packageName}.sauti.sovereign.vault.salt"
+        val salt = "sauti_offline_ai_device_sovereign_salt_2026_argon2".toByteArray(Charsets.UTF_8)
+        val info = "sauti_aes_gcm_256_model_encryption_key".toByteArray(Charsets.UTF_8)
         val md = MessageDigest.getInstance("SHA-256")
-        val keyBytes = md.digest(seed.toByteArray(Charsets.UTF_8))
+        md.update(salt)
+        md.update(info)
+        val keyBytes = md.digest()
         return SecretKeySpec(keyBytes, "AES")
     }
 

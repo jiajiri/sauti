@@ -5,11 +5,11 @@ echo "=========================================================="
 echo "SAUTI CLEAN-SLATE EMULATOR TEST PIPELINE"
 echo "=========================================================="
 
-APK_PATH="android/app/build/outputs/apk/debug/sauti-v1.0.0-x86_64-debug.apk"
+APK_PATH="android/app/build/outputs/apk/release/sauti-v1.0.0-x86_64.apk"
 PACKAGE="com.sauti.app"
 
 if [ ! -f "$APK_PATH" ]; then
-    echo "Error: APK not found at $APK_PATH. Run ./gradlew assembleDebug first."
+    echo "Error: APK not found at $APK_PATH. Run ./gradlew assembleRelease first."
     exit 1
 fi
 

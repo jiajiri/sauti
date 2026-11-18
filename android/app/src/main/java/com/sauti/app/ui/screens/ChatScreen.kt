@@ -1,6 +1,9 @@
 package com.sauti.app.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -12,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
@@ -21,13 +25,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import com.airbnb.android.showkase.annotation.ShowkaseComposable
 import androidx.compose.ui.unit.dp
@@ -79,8 +91,9 @@ fun ChatScreen(
     val persistedMessages by viewModel?.activeMessages?.collectAsState() ?: remember { mutableStateOf(emptyList<com.sauti.app.data.local.ChatMessage>()) }
     val userProfile by viewModel?.userProfile?.collectAsState() ?: remember { mutableStateOf(com.sauti.app.data.model.UserProfile("User")) }
 
+    val focusRequester = remember { FocusRequester() }
     var streamingMessage by remember { mutableStateOf<ConversationalMessage?>(null) }
-    var inputMessage by remember { mutableStateOf("") }
+    var inputTextFieldValue by remember { mutableStateOf(TextFieldValue("")) }
     var isGenerating by remember { mutableStateOf(false) }
 
     val displayMessages = remember(persistedMessages, streamingMessage) {
@@ -112,9 +125,9 @@ fun ChatScreen(
     fun submitPrompt(promptText: String) {
         if (!isGenerating && promptText.isNotBlank()) {
             val userPrompt = promptText.trim()
-            inputMessage = ""
+            inputTextFieldValue = TextFieldValue("")
 
-            val currentSId = activeSessionId ?: "default"
+            val currentSId = viewModel?.getOrCreateActiveSession() ?: "default"
             viewModel?.updateSessionTitleIfDefault(currentSId, userPrompt)
             viewModel?.saveMessage(currentSId, isUser = true, text = userPrompt)
 
@@ -154,6 +167,15 @@ fun ChatScreen(
 
                 viewModel?.saveMessage(currentSId, isUser = false, text = finalResponse, tokensPerSec = finalTps)
 
+                // Dispatch task completion notification for background awareness
+                try {
+                    com.sauti.app.notifications.SautiNotificationManager.notifyTaskComplete(
+                        context = context,
+                        title = "Sauti Msaidizi / Assistant",
+                        previewText = finalResponse
+                    )
+                } catch (_: Exception) {}
+
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     streamingMessage = null
                     isGenerating = false
@@ -162,15 +184,28 @@ fun ChatScreen(
         }
     }
 
+    val pendingPrompt by viewModel?.pendingPrompt?.collectAsState() ?: remember { mutableStateOf(null) }
+
+    LaunchedEffect(pendingPrompt) {
+        pendingPrompt?.let { prompt ->
+            if (prompt.isNotBlank()) {
+                viewModel?.consumePendingPrompt()
+                submitPrompt(prompt)
+            }
+        }
+    }
+
+    val colors = MaterialTheme.colorScheme
+
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
             .navigationBarsPadding()
             .imePadding(),
-        containerColor = CanvasBlack,
+        containerColor = colors.background,
         topBar = {
-            // Top App Bar (Reference 6): Circular menu button, pill badge, circular new chat action
+            // Top App Bar: Circular menu button, pill badge, circular new chat action
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -184,12 +219,12 @@ fun ChatScreen(
                     modifier = Modifier
                         .size(42.dp)
                         .clip(CircleShape)
-                        .background(ChipDarkFill)
+                        .background(colors.surfaceVariant)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Menu,
                         contentDescription = "Menu",
-                        tint = TextWhite,
+                        tint = colors.onSurface,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -197,7 +232,7 @@ fun ChatScreen(
                 // Center subtle pill badge ("Sauti")
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = ChipDarkFill,
+                    color = colors.surfaceVariant,
                     modifier = Modifier.height(34.dp)
                 ) {
                     Row(
@@ -206,14 +241,14 @@ fun ChatScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.AutoAwesome,
+                            imageVector = Icons.Outlined.ChatBubbleOutline,
                             contentDescription = null,
-                            tint = AccentBlue,
-                            modifier = Modifier.size(14.dp)
+                            tint = colors.primary,
+                            modifier = Modifier.size(15.dp)
                         )
                         Text(
                             text = if (displayMessages.isEmpty()) "Sauti" else activeSessionTitle,
-                            color = TextWhite,
+                            color = colors.onSurface,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -226,19 +261,19 @@ fun ChatScreen(
                     modifier = Modifier
                         .size(42.dp)
                         .clip(CircleShape)
-                        .background(ChipDarkFill)
+                        .background(colors.surfaceVariant)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Edit,
                         contentDescription = "New Chat",
-                        tint = TextWhite,
+                        tint = colors.onSurface,
                         modifier = Modifier.size(20.dp)
                     )
                 }
             }
         },
         bottomBar = {
-            // Docked Pill Composer Bar (Reference 6)
+            // Docked Pill Composer Bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -249,7 +284,7 @@ fun ChatScreen(
                 // Pill Container
                 Surface(
                     shape = RoundedCornerShape(28.dp),
-                    color = PillInputBg,
+                    color = colors.surfaceVariant,
                     modifier = Modifier
                         .weight(1f)
                         .height(54.dp)
@@ -265,7 +300,7 @@ fun ChatScreen(
                         Icon(
                             imageVector = Icons.Outlined.Add,
                             contentDescription = "Attach",
-                            tint = TextMuted,
+                            tint = colors.onSurfaceVariant,
                             modifier = Modifier
                                 .size(24.dp)
                                 .clickable { /* Attachment trigger */ }
@@ -273,26 +308,28 @@ fun ChatScreen(
 
                         // Center Input Field
                         BasicTextField(
-                            value = inputMessage,
-                            onValueChange = { inputMessage = it },
-                            modifier = Modifier.weight(1f),
+                            value = inputTextFieldValue,
+                            onValueChange = { inputTextFieldValue = it },
+                            modifier = Modifier
+                                .weight(1f)
+                                .focusRequester(focusRequester),
                             textStyle = TextStyle(
-                                color = TextWhite,
+                                color = colors.onSurface,
                                 fontSize = 15.sp,
                                 fontFamily = FontFamily.Default
                             ),
-                            cursorBrush = SolidColor(AccentBlue),
+                            cursorBrush = SolidColor(colors.primary),
                             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                                 imeAction = androidx.compose.ui.text.input.ImeAction.Send
                             ),
                             keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                                onSend = { submitPrompt(inputMessage) }
+                                onSend = { submitPrompt(inputTextFieldValue.text) }
                             ),
                             decorationBox = { innerTextField ->
-                                if (inputMessage.isEmpty()) {
+                                if (inputTextFieldValue.text.isEmpty()) {
                                     Text(
                                         text = "Ask Sauti...",
-                                        color = TextMuted,
+                                        color = colors.onSurfaceVariant,
                                         fontSize = 15.sp
                                     )
                                 }
@@ -304,7 +341,7 @@ fun ChatScreen(
                         Icon(
                             imageVector = Icons.Outlined.Mic,
                             contentDescription = "Speak",
-                            tint = TextMuted,
+                            tint = colors.onSurfaceVariant,
                             modifier = Modifier
                                 .size(22.dp)
                                 .clickable { onVoiceClick() }
@@ -312,11 +349,11 @@ fun ChatScreen(
                     }
                 }
 
-                // Far-Right Circular Blue Send Arrow Button (Reference: user request)
+                // Far-Right Circular Blue Send Arrow Button
                 IconButton(
                     onClick = {
-                        if (inputMessage.isNotBlank()) {
-                            submitPrompt(inputMessage)
+                        if (inputTextFieldValue.text.isNotBlank()) {
+                            submitPrompt(inputTextFieldValue.text)
                         } else {
                             onVoiceClick()
                         }
@@ -324,12 +361,12 @@ fun ChatScreen(
                     modifier = Modifier
                         .size(54.dp)
                         .clip(CircleShape)
-                        .background(AccentBlue)
+                        .background(colors.primary)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
                         contentDescription = "Send message",
-                        tint = TextWhite,
+                        tint = Color.White,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -353,7 +390,7 @@ fun ChatScreen(
                     val firstName = userProfile.fullName.trim().split("\\s+".toRegex()).firstOrNull { it.isNotEmpty() } ?: "there"
                     Text(
                         text = "Hello, $firstName",
-                        color = TextWhite,
+                        color = colors.onBackground,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.5).sp
@@ -361,7 +398,7 @@ fun ChatScreen(
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "What can I help you explore today?",
-                        color = TextMuted,
+                        color = colors.onSurfaceVariant,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Normal
                     )
@@ -396,19 +433,19 @@ fun ChatScreen(
 
                     Spacer(modifier = Modifier.height(28.dp))
 
-                    // Centered High-Contrast White Pill CTA Button
+                    // Centered Pill CTA Button
                     Button(
                         onClick = { submitPrompt("Niambie jinsi unavyoweza kunisaidia leo kama msaidizi wa kibinafsi.") },
                         shape = RoundedCornerShape(24.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = BtnWhite,
-                            contentColor = Color.Black
+                            containerColor = colors.surfaceVariant,
+                            contentColor = colors.onSurface
                         ),
                         contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
                     ) {
                         Text(
                             text = "Explore tasks",
-                            color = Color.Black,
+                            color = colors.onSurface,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -427,7 +464,18 @@ fun ChatScreen(
                     items(displayMessages, key = { it.id }) { msg ->
                         MessageBubbleRow(
                             message = msg,
-                            onSpeakClick = { ttsEngine.speak(msg.text) }
+                            onSpeakClick = { ttsEngine.speak(msg.text) },
+                            onEditClick = {
+                                inputTextFieldValue = TextFieldValue(
+                                    text = msg.text,
+                                    selection = TextRange(msg.text.length)
+                                )
+                                coroutineScope.launch {
+                                    try {
+                                        focusRequester.requestFocus()
+                                    } catch (_: Exception) {}
+                                }
+                            }
                         )
                     }
                 }
@@ -442,10 +490,11 @@ private fun SuggestionChipItem(
     label: String,
     onClick: () -> Unit
 ) {
+    val colors = MaterialTheme.colorScheme
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
-        color = ChipDarkFill,
+        color = colors.surfaceVariant,
         modifier = Modifier.height(44.dp)
     ) {
         Row(
@@ -456,12 +505,12 @@ private fun SuggestionChipItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = TextWhite,
+                tint = colors.onSurface,
                 modifier = Modifier.size(18.dp)
             )
             Text(
                 text = label,
-                color = TextWhite,
+                color = colors.onSurface,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -530,11 +579,249 @@ private fun AutoScrollingChipRow(
     }
 }
 
+// ── Markdown & Code Block Parsing Models ────────────────────────────────────
+
+sealed interface ContentBlock {
+    data class TextBlock(val content: String) : ContentBlock
+    data class CodeBlock(val language: String, val code: String) : ContentBlock
+}
+
+/**
+ * Normalizes raw/malformed model artifacts (<br/>, &lt;br/&gt;, etc.) and splits
+ * markdown into structured TextBlock and CodeBlock segments.
+ */
+internal fun parseMessageBlocks(raw: String): List<ContentBlock> {
+    if (raw.isBlank()) return emptyList()
+
+    // Normalize raw HTML breaks and entities emitted by LLM tokens
+    val sanitized = raw
+        .replace(Regex("(?i)<br\\s*/?>"), "\n")
+        .replace(Regex("(?i)&lt;br\\s*/?&gt;"), "\n")
+        .replace(Regex("(?i)&amp;"), "&")
+        .replace(Regex("(?i)&lt;"), "<")
+        .replace(Regex("(?i)&gt;"), ">")
+        .replace(Regex("(?i)&quot;"), "\"")
+
+    val blocks = mutableListOf<ContentBlock>()
+    val codeFenceRegex = Regex("(?s)```([a-zA-Z0-9_-]*)[\\r\\n]+(.*?)```")
+    var lastIndex = 0
+
+    for (match in codeFenceRegex.findAll(sanitized)) {
+        val start = match.range.first
+        val end = match.range.last + 1
+
+        if (start > lastIndex) {
+            val textBefore = sanitized.substring(lastIndex, start).trim()
+            if (textBefore.isNotEmpty()) {
+                blocks.add(ContentBlock.TextBlock(textBefore))
+            }
+        }
+
+        val lang = match.groupValues[1].trim().ifEmpty { "code" }
+        val code = match.groupValues[2].trimEnd()
+        blocks.add(ContentBlock.CodeBlock(language = lang, code = code))
+        lastIndex = end
+    }
+
+    if (lastIndex < sanitized.length) {
+        val remainingText = sanitized.substring(lastIndex).trim()
+        if (remainingText.isNotEmpty()) {
+            blocks.add(ContentBlock.TextBlock(remainingText))
+        }
+    }
+
+    return if (blocks.isEmpty()) listOf(ContentBlock.TextBlock(sanitized.trim())) else blocks
+}
+
+/**
+ * Renders an inline/block formatted text paragraph supporting headers (#, ##),
+ * bold (**text**), italics (*text*), and inline code (`code`).
+ */
+@Composable
+private fun FormattedMarkdownText(
+    text: String,
+    textColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val lines = text.split("\n")
+
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        lines.forEach { line ->
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                return@forEach
+            }
+
+            // Headers
+            val isH1 = trimmed.startsWith("# ")
+            val isH2 = trimmed.startsWith("## ")
+            val isH3 = trimmed.startsWith("### ")
+            val cleanLine = when {
+                isH1 -> trimmed.removePrefix("# ")
+                isH2 -> trimmed.removePrefix("## ")
+                isH3 -> trimmed.removePrefix("### ")
+                else -> trimmed
+            }
+
+            val fontSize = when {
+                isH1 -> 18.sp
+                isH2 -> 16.sp
+                isH3 -> 15.sp
+                else -> 14.5.sp
+            }
+            val fontWeight = when {
+                isH1 || isH2 -> FontWeight.Bold
+                isH3 -> FontWeight.SemiBold
+                else -> FontWeight.Normal
+            }
+
+            val annotated = buildAnnotatedString {
+                // Parse bold (**...**) and inline code (`...`)
+                val tokenRegex = Regex("(\\*\\*.*?\\*\\*|`.*?`)")
+                var curIdx = 0
+                for (match in tokenRegex.findAll(cleanLine)) {
+                    val mStart = match.range.first
+                    val mEnd = match.range.last + 1
+                    if (mStart > curIdx) {
+                        append(cleanLine.substring(curIdx, mStart))
+                    }
+                    val matchedVal = match.value
+                    if (matchedVal.startsWith("**") && matchedVal.endsWith("**") && matchedVal.length >= 4) {
+                        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                            append(matchedVal.substring(2, matchedVal.length - 2))
+                        }
+                    } else if (matchedVal.startsWith("`") && matchedVal.endsWith("`") && matchedVal.length >= 2) {
+                        withStyle(
+                            SpanStyle(
+                                fontFamily = FontFamily.Monospace,
+                                background = Color(0x33888888),
+                                fontWeight = FontWeight.Medium
+                            )
+                        ) {
+                            append(" " + matchedVal.substring(1, matchedVal.length - 1) + " ")
+                        }
+                    }
+                    curIdx = mEnd
+                }
+                if (curIdx < cleanLine.length) {
+                    append(cleanLine.substring(curIdx))
+                }
+            }
+
+            Text(
+                text = annotated,
+                color = textColor,
+                fontSize = fontSize,
+                fontWeight = fontWeight,
+                lineHeight = if (isH1 || isH2) 24.sp else 21.sp
+            )
+        }
+    }
+}
+
+/**
+ * High-contrast production code block container with a clean header, language tag,
+ * and one-click copy button.
+ */
+@Composable
+private fun CodeBlockView(
+    language: String,
+    code: String,
+    onCopyCode: () -> Unit
+) {
+    var copied by remember { mutableStateOf(false) }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFF121214),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Column {
+            // Header Bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF1E1E24))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = language.lowercase(Locale.ROOT),
+                    color = Color(0xFFA1A1AA),
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable {
+                            onCopyCode()
+                            copied = true
+                        }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
+                        contentDescription = "Copy code",
+                        tint = if (copied) Color(0xFF22C55E) else Color(0xFFA1A1AA),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = if (copied) "Copied" else "Copy",
+                        color = if (copied) Color(0xFF22C55E) else Color(0xFFA1A1AA),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            // Code Content Container with Horizontal Scroll
+            SelectionContainer {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(14.dp)
+                ) {
+                    Text(
+                        text = code,
+                        color = Color(0xFFE4E4E7),
+                        fontSize = 13.sp,
+                        fontFamily = FontFamily.Monospace,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 internal fun MessageBubbleRow(
     message: ConversationalMessage,
-    onSpeakClick: () -> Unit
+    onSpeakClick: () -> Unit,
+    onEditClick: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val colors = MaterialTheme.colorScheme
+    val isLight = colors.background.red > 0.5f
+
+    val bubbleBg = if (message.isUser) {
+        if (isLight) Color(0xFFE2E8F0) else Color(0xFF262626)
+    } else {
+        if (isLight) Color(0xFFFFFFFF) else Color(0xFF171717)
+    }
+
+    val blocks = remember(message.text) { parseMessageBlocks(message.text) }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (message.isUser) Alignment.End else Alignment.Start
@@ -546,32 +833,118 @@ internal fun MessageBubbleRow(
                 bottomStart = if (message.isUser) 18.dp else 4.dp,
                 bottomEnd = if (message.isUser) 4.dp else 18.dp
             ),
-            color = if (message.isUser) Color(0xFF262626) else Color(0xFF171717),
-            modifier = Modifier.widthIn(max = 320.dp)
+            color = bubbleBg,
+            shadowElevation = if (isLight && !message.isUser) 1.dp else 0.dp,
+            modifier = Modifier.widthIn(max = if (message.isUser) 320.dp else 360.dp)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                Text(
-                    text = message.text,
-                    color = TextWhite,
-                    fontSize = 15.sp,
-                    lineHeight = 22.sp
-                )
+                // Content Rendering
+                if (message.isUser) {
+                    Text(
+                        text = message.text,
+                        color = colors.onSurface,
+                        fontSize = 15.sp,
+                        lineHeight = 22.sp
+                    )
+                } else {
+                    blocks.forEachIndexed { index, block ->
+                        if (index > 0) Spacer(modifier = Modifier.height(8.dp))
+                        when (block) {
+                            is ContentBlock.TextBlock -> {
+                                FormattedMarkdownText(
+                                    text = block.content,
+                                    textColor = colors.onSurface
+                                )
+                            }
+                            is ContentBlock.CodeBlock -> {
+                                CodeBlockView(
+                                    language = block.language,
+                                    code = block.code,
+                                    onCopyCode = {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                        val clip = ClipData.newPlainText("Code", block.code)
+                                        clipboard?.setPrimaryClip(clip)
+                                        Toast.makeText(context, "Code copied", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
 
-                if (!message.isUser && message.text.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                // Action Bar (Copy, TTS, Edit)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = if (message.isUser) Arrangement.Start else Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (message.isUser) {
+                        // User message: Edit prompt button
+                        IconButton(
+                            onClick = onEditClick,
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Edit,
+                                contentDescription = "Edit prompt",
+                                tint = colors.onSurfaceVariant,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        // User message: Copy prompt
+                        IconButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                val clip = ClipData.newPlainText("Prompt", message.text)
+                                clipboard?.setPrimaryClip(clip)
+                                Toast.makeText(context, "Prompt copied", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ContentCopy,
+                                contentDescription = "Copy message",
+                                tint = colors.onSurfaceVariant,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    } else if (message.text.isNotBlank()) {
+                        // Assistant message: Copy full message
+                        IconButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                val cleanText = message.text
+                                    .replace(Regex("(?i)<br\\s*/?>"), "\n")
+                                    .replace(Regex("(?i)&lt;br\\s*/?&gt;"), "\n")
+                                val clip = ClipData.newPlainText("Response", cleanText)
+                                clipboard?.setPrimaryClip(clip)
+                                Toast.makeText(context, "Response copied", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ContentCopy,
+                                contentDescription = "Copy response",
+                                tint = colors.onSurfaceVariant,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        // Assistant message: Read aloud
                         IconButton(
                             onClick = onSpeakClick,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(26.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
                                 contentDescription = "Read aloud",
-                                tint = TextMuted,
+                                tint = colors.onSurfaceVariant,
                                 modifier = Modifier.size(16.dp)
                             )
                         }

@@ -34,17 +34,10 @@ import com.sauti.app.viewmodel.SautiWorkspace
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-private val CardDarkBg   = Color(0xFF171717)
-private val DividerColor = Color(0xFF262626)
-private val TextPri      = Color(0xFFFFFFFF)
-private val TextSec      = Color(0xFF9E9E9E)
-private val AccentBlue   = Color(0xFF2563EB)
-private val CircleBtnBg  = Color(0xFF1E1E1E)
-private val DangerRed    = Color(0xFFEF4444)
+private val DangerRed = Color(0xFFEF4444)
 
 /**
- * Main Settings Screen strictly modeled after References 1 & 2.
- * Features grouped rounded dark cards with hairline dividers and trailing chevrons.
+ * Main Settings Screen adhering to MaterialTheme dynamic light/dark tokens.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,17 +46,24 @@ fun SettingsScreen(
     viewModel: SautiNavigationViewModel?,
     onBack: () -> Unit
 ) {
-    BackHandler(enabled = true) { onBack() }
+    BackHandler { onBack() }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { SautiPreferencesStore(context) }
 
-    var currentName by remember { mutableStateOf(prefs.userName) }
+    val colors = MaterialTheme.colorScheme
+    val cardBg = colors.surface
+    val dividerColor = colors.outline
+    val textPrimary = colors.onSurface
+    val textSecondary = colors.onSurfaceVariant
+    val accentColor = colors.primary
+
     var currentTheme by remember { mutableStateOf(prefs.appTheme) }
+    var currentName by remember { mutableStateOf(prefs.userName) }
     var customInstructions by remember { mutableStateOf(prefs.customInstructions) }
-    var selectedModel by remember { mutableStateOf(prefs.modelTier) }
     var biometricLock by remember { mutableStateOf(prefs.biometricLockEnabled) }
+    var selectedModel by remember { mutableStateOf(prefs.modelTier) }
 
     var showNameDialog by remember { mutableStateOf(false) }
     var showInstructionsDialog by remember { mutableStateOf(false) }
@@ -74,11 +74,11 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(colors.background)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        // Top App Bar: Circular back button and centered "Settings" title
+        // Top App Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -90,18 +90,18 @@ fun SettingsScreen(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(CircleBtnBg)
+                    .background(colors.surfaceVariant)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
                     contentDescription = "Back",
-                    tint = TextPri
+                    tint = textPrimary
                 )
             }
 
             Text(
                 text = "Settings",
-                color = TextPri,
+                color = textPrimary,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
@@ -118,74 +118,86 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // ── Group 1: Account & Performance (Reference 1) ─────────────────
+            // ── Group 1: Account & Performance ────────────────────────────────
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
-                    .background(CardDarkBg)
+                    .background(cardBg)
             ) {
                 SettingsActionRow(
                     icon = Icons.Outlined.Person,
                     title = "Manage account",
                     subtitle = currentName,
+                    textColor = textPrimary,
+                    secColor = textSecondary,
                     onClick = { showNameDialog = true }
                 )
 
-                HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
                 SettingsActionRow(
                     icon = Icons.Outlined.Speed,
-                    title = "Offline Intelligence & Storage",
-                    subtitle = "${selectedModel.displayName} (${selectedModel.userFacingSize})",
+                    title = "Offline Assistant & Storage",
+                    subtitle = selectedModel.displayName,
+                    textColor = textPrimary,
+                    secColor = textSecondary,
                     onClick = { showModelDialog = true }
                 )
             }
 
-            // ── Group 2: Preferences (Reference 1) ───────────────────────────
-            SettingsSectionHeader(title = "Preferences")
+            // ── Group 2: Preferences ──────────────────────────────────────────
+            SettingsSectionHeader(title = "Preferences", color = textSecondary)
 
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
-                    .background(CardDarkBg)
+                    .background(cardBg)
             ) {
                 SettingsActionRow(
                     icon = Icons.Outlined.Notifications,
                     title = "Notifications",
-                    onClick = { /* Notifications handler */ }
+                    textColor = textPrimary,
+                    secColor = textSecondary,
+                    onClick = { /* Notifications */ }
                 )
 
-                HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
                 SettingsActionRow(
                     icon = Icons.Outlined.Psychology,
-                    title = "Personal Intelligence",
+                    title = "Assistant Personalization",
                     subtitle = if (customInstructions.isBlank()) "Set custom response style" else "Customized",
+                    textColor = textPrimary,
+                    secColor = textSecondary,
                     onClick = { showInstructionsDialog = true }
                 )
 
-                HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
                 SettingsActionRow(
                     icon = Icons.Outlined.Face,
                     title = "Avatar",
                     subtitle = "Sovereign Profile (${currentName.firstOrNull()?.uppercase() ?: "U"})",
+                    textColor = textPrimary,
+                    secColor = textSecondary,
                     onClick = { showNameDialog = true }
                 )
 
-                HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
                 SettingsActionRow(
-                    icon = Icons.Outlined.AutoAwesome,
+                    icon = Icons.Outlined.Tune,
                     title = "Task settings",
+                    textColor = textPrimary,
+                    secColor = textSecondary,
                     onClick = { /* Task settings */ }
                 )
 
-                HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
-                // Theme Selector Row with Up/Down Indicator (Reference 1)
+                // Theme Selector Row
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -193,56 +205,64 @@ fun SettingsScreen(
                         .padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Outlined.DarkMode, contentDescription = null, tint = TextPri, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Outlined.DarkMode, contentDescription = null, tint = textPrimary, modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(16.dp))
-                    Text("Theme", color = TextPri, fontSize = 15.sp, fontWeight = FontWeight.Normal, modifier = Modifier.weight(1f))
+                    Text("Theme", color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Normal, modifier = Modifier.weight(1f))
 
-                    Text(currentTheme.displayName, color = TextSec, fontSize = 14.sp)
+                    Text(currentTheme.displayName, color = textSecondary, fontSize = 14.sp)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Icon(Icons.Outlined.UnfoldMore, contentDescription = null, tint = TextSec, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.UnfoldMore, contentDescription = null, tint = textSecondary, modifier = Modifier.size(18.dp))
                 }
 
-                HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
-                // Voice Setting -> Navigates to VoiceSettingsScreen (Reference 4)
+                // Voice Setting
                 SettingsActionRow(
                     icon = Icons.Outlined.GraphicEq,
                     title = "Voice",
                     subtitle = prefs.voicePersona.personaName,
+                    textColor = textPrimary,
+                    secColor = textSecondary,
                     onClick = { viewModel?.selectWorkspace(SautiWorkspace.VOICE_SETTINGS_WORKSPACE) }
                 )
 
-                HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
                 SettingsActionRow(
                     icon = Icons.Outlined.Headphones,
                     title = "Media",
                     subtitle = "Hands-free automatic audio routing",
+                    textColor = textPrimary,
+                    secColor = textSecondary,
                     onClick = { /* Media routing */ }
                 )
 
-                HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
                 SettingsActionRow(
                     icon = Icons.Outlined.Devices,
                     title = "Device controls",
+                    textColor = textPrimary,
+                    secColor = textSecondary,
                     onClick = { /* Device controls */ }
                 )
             }
 
-            // ── Group 3: Data & Privacy (Reference 2) ────────────────────────
-            SettingsSectionHeader(title = "Data & Privacy")
+            // ── Group 3: Data & Privacy ───────────────────────────────────────
+            SettingsSectionHeader(title = "Data & Privacy", color = textSecondary)
 
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
-                    .background(CardDarkBg)
+                    .background(cardBg)
             ) {
                 SettingsActionRow(
                     icon = Icons.Outlined.Share,
                     title = "Export chat history",
                     subtitle = "Save all chats as clean .txt transcript",
+                    textColor = textPrimary,
+                    secColor = textSecondary,
                     onClick = {
                         scope.launch(Dispatchers.IO) {
                             val file = viewModel?.exportConversationsToText(context)
@@ -259,20 +279,20 @@ fun SettingsScreen(
                     }
                 )
 
-                HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
-                // Biometric App Lock Toggle
+                // Biometric Lock Toggle
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Outlined.Lock, contentDescription = null, tint = TextPri, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Outlined.Lock, contentDescription = null, tint = textPrimary, modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("App Lock (Fingerprint / PIN)", color = TextPri, fontSize = 15.sp, fontWeight = FontWeight.Normal)
-                        Text("Lock conversations on shared devices", color = TextSec, fontSize = 12.sp)
+                        Text("App Lock (Fingerprint / PIN)", color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Normal)
+                        Text("Lock conversations on shared devices", color = textSecondary, fontSize = 12.sp)
                     }
                     Switch(
                         checked = biometricLock,
@@ -282,70 +302,81 @@ fun SettingsScreen(
                         },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
-                            checkedTrackColor = AccentBlue,
-                            uncheckedTrackColor = Color(0xFF262626)
+                            checkedTrackColor = accentColor,
+                            uncheckedTrackColor = colors.surfaceVariant
                         )
                     )
                 }
 
-                HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
                 SettingsActionRow(
                     icon = Icons.Outlined.Shield,
                     title = "Privacy Help Hub",
                     subtitle = "100% on-device sovereign computing guarantee",
+                    textColor = textPrimary,
+                    secColor = textSecondary,
                     onClick = { /* Privacy details */ }
                 )
 
-                HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
                 SettingsActionRow(
                     icon = Icons.Outlined.DeleteForever,
                     title = "Clear all history",
                     titleColor = DangerRed,
+                    textColor = textPrimary,
+                    secColor = textSecondary,
                     onClick = { showClearDialog = true }
                 )
             }
 
-            // ── Group 4: Get Support (Reference 2) ───────────────────────────
-            SettingsSectionHeader(title = "Get support")
+            // ── Group 4: Get Support ──────────────────────────────────────────
+            SettingsSectionHeader(title = "Get support", color = textSecondary)
 
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
-                    .background(CardDarkBg)
+                    .background(cardBg)
             ) {
                 SettingsActionRow(
                     icon = Icons.Outlined.HelpOutline,
                     title = "Help",
-                    onClick = { /* Help center */ }
+                    textColor = textPrimary,
+                    secColor = textSecondary,
+                    onClick = { /* Help */ }
                 )
 
-                HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
                 SettingsActionRow(
                     icon = Icons.Outlined.Feedback,
                     title = "Report a problem",
-                    onClick = { /* Report problem */ }
+                    textColor = textPrimary,
+                    secColor = textSecondary,
+                    onClick = { /* Report */ }
                 )
 
-                HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
-                // About Row -> Navigates to AboutScreen (Reference 5)
                 SettingsActionRow(
                     icon = Icons.Outlined.Info,
                     title = "About",
+                    textColor = textPrimary,
+                    secColor = textSecondary,
                     onClick = { viewModel?.selectWorkspace(SautiWorkspace.ABOUT_WORKSPACE) }
                 )
 
-                HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
                 SettingsActionRow(
                     icon = Icons.Outlined.Update,
                     title = "Updates",
                     subtitle = "Check offline model packs",
-                    onClick = { /* Check updates */ }
+                    textColor = textPrimary,
+                    secColor = textSecondary,
+                    onClick = { /* Updates */ }
                 )
             }
 
@@ -358,8 +389,8 @@ fun SettingsScreen(
         ModalBottomSheet(
             onDismissRequest = { showThemeMenu = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = Color(0xFF1E1E1E),
-            dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF333333)) }
+            containerColor = colors.surface,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = colors.outline) }
         ) {
             Column(
                 modifier = Modifier
@@ -368,7 +399,7 @@ fun SettingsScreen(
                     .navigationBarsPadding(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("Select Theme", color = TextPri, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("Select Theme", color = textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
 
                 AppTheme.values().forEach { themeOption ->
                     val isSel = currentTheme == themeOption
@@ -376,7 +407,7 @@ fun SettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSel) Color(0xFF262626) else Color.Transparent)
+                            .background(if (isSel) colors.surfaceVariant else Color.Transparent)
                             .clickable {
                                 currentTheme = themeOption
                                 prefs.appTheme = themeOption
@@ -389,7 +420,7 @@ fun SettingsScreen(
                     ) {
                         Text(
                             text = themeOption.displayName,
-                            color = TextPri,
+                            color = textPrimary,
                             fontSize = 16.sp,
                             fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium
                         )
@@ -402,7 +433,7 @@ fun SettingsScreen(
                                 viewModel?.updateTheme(themeOption)
                                 showThemeMenu = false
                             },
-                            colors = RadioButtonDefaults.colors(selectedColor = AccentBlue)
+                            colors = RadioButtonDefaults.colors(selectedColor = accentColor)
                         )
                     }
                 }
@@ -411,13 +442,13 @@ fun SettingsScreen(
         }
     }
 
-    // Model Tier Bottom Sheet
+    // Model Tier Bottom Sheet (Clean without storage footprint size)
     if (showModelDialog) {
         ModalBottomSheet(
             onDismissRequest = { showModelDialog = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = Color(0xFF1E1E1E),
-            dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF333333)) }
+            containerColor = colors.surface,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = colors.outline) }
         ) {
             Column(
                 modifier = Modifier
@@ -426,7 +457,7 @@ fun SettingsScreen(
                     .navigationBarsPadding(),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text("Offline Intelligence Tier", color = TextPri, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("Offline Assistant Tier", color = textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
 
                 ModelTier.values().forEach { tier ->
                     val isSel = selectedModel == tier
@@ -434,7 +465,7 @@ fun SettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSel) Color(0xFF262626) else Color.Transparent)
+                            .background(if (isSel) colors.surfaceVariant else Color.Transparent)
                             .clickable {
                                 selectedModel = tier
                                 prefs.modelTier = tier
@@ -445,9 +476,8 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(tier.displayName, color = TextPri, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                            Text(tier.description, color = TextSec, fontSize = 13.sp)
-                            Text("Storage footprint: ${tier.userFacingSize}", color = AccentBlue, fontSize = 12.sp)
+                            Text(tier.displayName, color = textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                            Text(tier.description, color = textSecondary, fontSize = 13.sp)
                         }
 
                         RadioButton(
@@ -457,7 +487,7 @@ fun SettingsScreen(
                                 prefs.modelTier = tier
                                 showModelDialog = false
                             },
-                            colors = RadioButtonDefaults.colors(selectedColor = AccentBlue)
+                            colors = RadioButtonDefaults.colors(selectedColor = accentColor)
                         )
                     }
                 }
@@ -472,8 +502,8 @@ fun SettingsScreen(
         ModalBottomSheet(
             onDismissRequest = { showNameDialog = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = Color(0xFF1E1E1E),
-            dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF333333)) },
+            containerColor = colors.surface,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = colors.outline) },
             modifier = Modifier.imePadding()
         ) {
             Column(
@@ -483,20 +513,16 @@ fun SettingsScreen(
                     .navigationBarsPadding(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("Manage Account", color = TextPri, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("This name personalizes your sovereign avatar initials and chat transcripts.", color = TextSec, fontSize = 14.sp)
+                Text("Account Name", color = textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 OutlinedTextField(
                     value = tempName,
                     onValueChange = { tempName = it },
                     singleLine = true,
-                    label = { Text("Display Name") },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = TextPri,
-                        unfocusedTextColor = TextPri,
-                        focusedBorderColor = AccentBlue,
-                        unfocusedBorderColor = DividerColor,
-                        focusedLabelColor = AccentBlue,
-                        unfocusedLabelColor = TextSec
+                        focusedTextColor = textPrimary,
+                        unfocusedTextColor = textPrimary,
+                        focusedBorderColor = accentColor,
+                        unfocusedBorderColor = dividerColor
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -508,7 +534,7 @@ fun SettingsScreen(
                         onClick = { showNameDialog = false },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSec)
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = textSecondary)
                     ) {
                         Text("Cancel")
                     }
@@ -523,7 +549,7 @@ fun SettingsScreen(
                         },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)
+                        colors = ButtonDefaults.buttonColors(containerColor = accentColor)
                     ) {
                         Text("Save", color = Color.White)
                     }
@@ -538,8 +564,8 @@ fun SettingsScreen(
         ModalBottomSheet(
             onDismissRequest = { showInstructionsDialog = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = Color(0xFF1E1E1E),
-            dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF333333)) },
+            containerColor = colors.surface,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = colors.outline) },
             modifier = Modifier.imePadding()
         ) {
             Column(
@@ -549,19 +575,19 @@ fun SettingsScreen(
                     .navigationBarsPadding(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("Personal Intelligence", color = TextPri, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("Tell Sauti how you would like it to respond (e.g. 'Reply in concise Swahili' or 'Use bullet points').", color = TextSec, fontSize = 14.sp)
+                Text("Assistant Personalization", color = textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("Tell Sauti how you would like it to respond (e.g. 'Reply in concise Swahili').", color = textSecondary, fontSize = 14.sp)
                 OutlinedTextField(
                     value = tempInstructions,
                     onValueChange = { tempInstructions = it },
                     minLines = 4,
                     maxLines = 6,
-                    placeholder = { Text("e.g. Always answer in clear, formal Swahili...", color = TextSec) },
+                    placeholder = { Text("e.g. Always answer in clear, formal Swahili...", color = textSecondary) },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = TextPri,
-                        unfocusedTextColor = TextPri,
-                        focusedBorderColor = AccentBlue,
-                        unfocusedBorderColor = DividerColor
+                        focusedTextColor = textPrimary,
+                        unfocusedTextColor = textPrimary,
+                        focusedBorderColor = accentColor,
+                        unfocusedBorderColor = dividerColor
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -573,7 +599,7 @@ fun SettingsScreen(
                         onClick = { showInstructionsDialog = false },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSec)
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = textSecondary)
                     ) {
                         Text("Cancel")
                     }
@@ -586,7 +612,7 @@ fun SettingsScreen(
                         },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)
+                        colors = ButtonDefaults.buttonColors(containerColor = accentColor)
                     ) {
                         Text("Save", color = Color.White)
                     }
@@ -595,57 +621,42 @@ fun SettingsScreen(
         }
     }
 
-    // Clear History Bottom Sheet
+    // Clear All History Dialog
     if (showClearDialog) {
-        ModalBottomSheet(
+        AlertDialog(
             onDismissRequest = { showClearDialog = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = Color(0xFF1E1E1E),
-            dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF333333)) }
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 12.dp)
-                    .navigationBarsPadding(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text("Clear All Chat History?", color = TextPri, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("This action permanently deletes all saved conversations and local messages. This cannot be undone.", color = TextSec, fontSize = 14.sp)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+            containerColor = colors.surface,
+            title = {
+                Text("Clear All Conversations?", color = textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text("This will permanently erase all local conversation history and start a fresh state.", color = textSecondary, fontSize = 14.sp)
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel?.clearAllHistory()
+                        showClearDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
                 ) {
-                    OutlinedButton(
-                        onClick = { showClearDialog = false },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSec)
-                    ) {
-                        Text("Cancel")
-                    }
-                    Button(
-                        onClick = {
-                            viewModel?.clearAllHistory()
-                            showClearDialog = false
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
-                    ) {
-                        Text("Clear All", color = Color.White)
-                    }
+                    Text("Clear All", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDialog = false }) {
+                    Text("Cancel", color = textSecondary)
                 }
             }
-        }
+        )
     }
 }
 
 @Composable
-private fun SettingsSectionHeader(title: String) {
+private fun SettingsSectionHeader(title: String, color: Color) {
     Text(
         text = title,
-        color = TextSec,
+        color = color,
         fontSize = 14.sp,
         fontWeight = FontWeight.Medium,
         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -657,7 +668,9 @@ private fun SettingsActionRow(
     icon: ImageVector,
     title: String,
     subtitle: String? = null,
-    titleColor: Color = TextPri,
+    titleColor: Color? = null,
+    textColor: Color,
+    secColor: Color,
     onClick: () -> Unit
 ) {
     Row(
@@ -667,14 +680,14 @@ private fun SettingsActionRow(
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = titleColor, modifier = Modifier.size(24.dp))
+        Icon(icon, contentDescription = null, tint = titleColor ?: textColor, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = titleColor, fontSize = 15.sp, fontWeight = FontWeight.Normal)
+            Text(title, color = titleColor ?: textColor, fontSize = 15.sp, fontWeight = FontWeight.Normal)
             if (subtitle != null) {
-                Text(subtitle, color = TextSec, fontSize = 12.sp)
+                Text(subtitle, color = secColor, fontSize = 12.sp)
             }
         }
-        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = TextSec, modifier = Modifier.size(20.dp))
+        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = secColor, modifier = Modifier.size(20.dp))
     }
 }

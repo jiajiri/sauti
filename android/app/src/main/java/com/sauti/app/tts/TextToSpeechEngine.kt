@@ -7,6 +7,10 @@ import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -36,6 +40,7 @@ class TextToSpeechEngine(
 ) : TextToSpeech.OnInitListener {
 
     private val TAG = "TextToSpeechEngine"
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var tts: TextToSpeech? = TextToSpeech(context.applicationContext, this)
     private val isReady = AtomicBoolean(false)
     private var activePersona: VoicePersona = VoicePersona.MAWIMBI
@@ -130,7 +135,7 @@ class TextToSpeechEngine(
     }
 
     /**
-     * Speaks text using the active voice persona completely offline.
+     * Speaks text using the active voice persona completely offline asynchronously without blocking UI frames.
      */
     fun speak(text: String, onStart: () -> Unit = {}, onDone: () -> Unit = {}) {
         val clean = text.trim()
@@ -139,57 +144,64 @@ class TextToSpeechEngine(
             return
         }
 
-        stop()
+        scope.launch {
+            try {
+                tts?.stop()
 
-        if (!isReady.get() || tts == null) {
-            Log.w(TAG, "TTS Engine not ready yet, dropping utterance.")
-            onDone()
-            return
-        }
-
-        // Apply acoustic profile
-        applyPersonaParameters(activePersona)
-
-        // Ensure stream music is unmuted and audible
-        try {
-            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            if (audioManager != null) {
-                val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-                if (currentVol == 0) {
-                    audioManager.setStreamVolume(
-                        AudioManager.STREAM_MUSIC,
-                        audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) / 2,
-                        0
-                    )
+                if (!isReady.get() || tts == null) {
+                    Log.w(TAG, "TTS Engine not ready yet, dropping utterance.")
+                    onDone()
+                    return@launch
                 }
-            }
-        } catch (e: Exception) {
-            // Non-critical audio manager adjustment
-        }
 
-        val utteranceId = "sauti_speech_${System.currentTimeMillis()}"
-        tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(id: String?) {
-                onStart()
-            }
+                // Apply acoustic profile
+                applyPersonaParameters(activePersona)
 
-            override fun onDone(id: String?) {
+                // Ensure stream music is unmuted and audible without blocking main thread
+                try {
+                    val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                    if (audioManager != null) {
+                        val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                        if (currentVol == 0) {
+                            audioManager.setStreamVolume(
+                                AudioManager.STREAM_MUSIC,
+                                audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) / 2,
+                                0
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Non-critical audio manager adjustment
+                }
+
+                val utteranceId = "sauti_speech_${System.currentTimeMillis()}"
+                tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(id: String?) {
+                        onStart()
+                    }
+
+                    override fun onDone(id: String?) {
+                        onDone()
+                    }
+
+                    @Deprecated("Deprecated in Java")
+                    override fun onError(id: String?) {
+                        Log.w(TAG, "TTS utterance error on ID: $id")
+                        onDone()
+                    }
+                })
+
+                val params = Bundle().apply {
+                    putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_MUSIC)
+                    putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f)
+                }
+
+                tts?.speak(clean, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
+            } catch (e: Exception) {
+                Log.e(TAG, "Asynchronous speak failed: ${e.message}")
                 onDone()
             }
-
-            @Deprecated("Deprecated in Java")
-            override fun onError(id: String?) {
-                Log.w(TAG, "TTS utterance error on ID: $id")
-                onDone()
-            }
-        })
-
-        val params = Bundle().apply {
-            putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, AudioManager.STREAM_MUSIC)
-            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f)
         }
-
-        tts?.speak(clean, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
     }
 
     /**
@@ -216,6 +228,6 @@ class TextToSpeechEngine(
      */
     fun previewSpeak(persona: VoicePersona) {
         setVoicePersona(persona)
-        speak("Hello! I am Sauti AI, your intelligent on-device assistant. How can I help you today?")
+        speak("Hello! I am Sauti Assistant, your sovereign on-device assistant. How can I help you today?")
     }
 }

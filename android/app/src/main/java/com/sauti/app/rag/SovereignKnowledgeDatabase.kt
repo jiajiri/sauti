@@ -71,7 +71,7 @@ class SovereignKnowledgeDatabase(context: Context) : SQLiteOpenHelper(
             Triple(
                 "TECHNOLOGY",
                 "Sauti Sovereign Architecture",
-                "Sauti ni jukwaa la akili bandia (AI) linalofanya kazi ndani ya kifaa (on-device) bila mtandao wa intaneti. Inatumia mifano ya Whisper.cpp kwa sauti na Llama.cpp yenye viwango vya Qwen na SmolLM2."
+                "Sauti ni mfumo mkuu wa msaidizi wa kibinafsi (Sauti Msaidizi / Assistant) unaofanya kazi ndani ya kifaa (on-device) 100% bila kuhitaji mtandao wa intaneti. Inatumia miundombinu huru ya Whisper na Llama kwa sauti na mazungumzo."
             ),
             Triple(
                 "CODING",

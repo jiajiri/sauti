@@ -60,8 +60,8 @@ class SautiPreferencesStore(context: Context) {
     // ── User Profile & Personalization ────────────────────────────────────────
 
     var userName: String
-        get() = prefs.getString(KEY_USER_NAME, "User") ?: "User"
-        set(value) { prefs.edit().putString(KEY_USER_NAME, value.trim().ifEmpty { "User" }).apply() }
+        get() = prefs.getString(KEY_USER_NAME, "Local User") ?: "Local User"
+        set(value) { prefs.edit().putString(KEY_USER_NAME, value.trim().ifEmpty { "Local User" }).apply() }
 
     var customInstructions: String
         get() = prefs.getString(KEY_CUSTOM_INSTRUCTIONS, "") ?: ""
