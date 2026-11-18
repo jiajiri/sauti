@@ -354,7 +354,7 @@ fun SautiMainApp(
                                                 onDismissRequest = { showSessionMenu = false }
                                             ) {
                                                 DropdownMenuItem(
-                                                    text = { Text("Badili jina", color = colors.onSurface, fontSize = 14.sp) },
+                                                    text = { Text("Rename", color = colors.onSurface, fontSize = 14.sp) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Outlined.Edit,
@@ -370,7 +370,7 @@ fun SautiMainApp(
                                                     }
                                                 )
                                                 DropdownMenuItem(
-                                                    text = { Text("Futa", color = Color(0xFFEF4444), fontSize = 14.sp) },
+                                                    text = { Text("Delete", color = Color(0xFFEF4444), fontSize = 14.sp) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Outlined.DeleteOutline,
@@ -445,7 +445,7 @@ fun SautiMainApp(
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = "Mipangilio",
+                                    text = "Settings",
                                     color = colors.onSurfaceVariant,
                                     fontSize = 12.sp
                                 )
@@ -469,7 +469,7 @@ fun SautiMainApp(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Mpya", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("New chat", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -490,7 +490,7 @@ fun SautiMainApp(
                 }
                 SautiWorkspace.AUDIO_WORKSPACE -> {
                     VoiceModeScreen(
-                        liveTranscript = "Inasikiliza...",
+                        liveTranscript = "Inasikiliza sauti...",
                         isSpeaking = false,
                         onCloseClick = { viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE) },
                         onToggleVoice = {}
@@ -554,7 +554,7 @@ fun SautiMainApp(
             onDismissRequest = { sessionToRename = null },
             containerColor = colors.surface,
             title = {
-                Text("Badili Jina", color = colors.onSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("Rename Conversation", color = colors.onSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             },
             text = {
                 OutlinedTextField(
@@ -580,12 +580,12 @@ fun SautiMainApp(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = colors.primary)
                 ) {
-                    Text("Hifadhi", color = Color.White)
+                    Text("Rename", color = Color.White)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { sessionToRename = null }) {
-                    Text("Ghairi", color = colors.onSurfaceVariant)
+                    Text("Cancel", color = colors.onSurfaceVariant)
                 }
             }
         )
@@ -597,11 +597,11 @@ fun SautiMainApp(
             onDismissRequest = { sessionToDelete = null },
             containerColor = colors.surface,
             title = {
-                Text("Futa Mazungumzo?", color = colors.onSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("Delete Conversation?", color = colors.onSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             },
             text = {
                 Text(
-                    "Una uhakika unataka kufuta \"${session.title}\"? Mazungumzo haya hayataweza kurejeshwa.",
+                    "Are you sure you want to delete \"${session.title}\"? This action cannot be undone.",
                     color = colors.onSurfaceVariant,
                     fontSize = 14.sp
                 )
@@ -614,12 +614,12 @@ fun SautiMainApp(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
                 ) {
-                    Text("Futa", color = Color.White)
+                    Text("Delete", color = Color.White)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { sessionToDelete = null }) {
-                    Text("Ghairi", color = colors.onSurfaceVariant)
+                    Text("Cancel", color = colors.onSurfaceVariant)
                 }
             }
         )

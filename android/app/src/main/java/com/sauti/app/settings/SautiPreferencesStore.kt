@@ -43,9 +43,9 @@ enum class VadSensitivity(
  * Application Theme Modes: Auto (System-driven), Dark Mode, or Light Mode.
  */
 enum class AppTheme(val displayName: String) {
-    SYSTEM("Kama mfumo"),
-    DARK("Giza"),
-    LIGHT("Nuru")
+    SYSTEM("Auto"),
+    DARK("Dark"),
+    LIGHT("Light")
 }
 
 /**

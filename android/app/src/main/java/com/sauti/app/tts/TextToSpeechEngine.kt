@@ -136,10 +136,23 @@ class TextToSpeechEngine(
 
     /**
      * Speaks text using the active voice persona completely offline asynchronously without blocking UI frames.
+     * Silently no-ops if the Whisper voice model is not yet installed and validated.
+     * No hardcoded or mocked voices — TTS is fully disabled until voice_lite.bin is a valid GGML binary.
      */
     fun speak(text: String, onStart: () -> Unit = {}, onDone: () -> Unit = {}) {
         val clean = text.trim()
         if (clean.isBlank()) {
+            onDone()
+            return
+        }
+
+        // Gate: require a valid Whisper GGML model before allowing any TTS output
+        val voicePath = com.sauti.app.sauti.SautiEngineLoader.getSautiVoicePath()
+        val voiceFile = voicePath?.let { java.io.File(it) }
+        val voiceReady = voiceFile != null &&
+            com.sauti.app.sync.ModelDownloadWorker.isValidGgml(voiceFile)
+        if (!voiceReady) {
+            Log.i(TAG, "TTS suppressed: Whisper voice model not yet installed (voice_lite.bin not a valid GGML).")
             onDone()
             return
         }

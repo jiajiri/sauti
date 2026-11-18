@@ -133,6 +133,9 @@ object SautiEngineLoader {
             Log.w(TAG, "Failed to schedule model sync: ${e.message}")
         }
 
+        // Set English as the default voice ASR language on startup
+        try { nativeSetVoiceLanguage("en") } catch (_: Throwable) {}
+
         val voiceFile = File(sautiDir, "voice_lite.bin")
         if (!voiceFile.exists() || voiceFile.length() == 0L) {
             copyAssetToFile(context, ASSET_SAUTI_VOICE_LITE, voiceFile)
@@ -157,17 +160,17 @@ object SautiEngineLoader {
         initKnowledgeStore(context)
 
         try {
-            if (com.sauti.app.sync.ModelDownloadWorker.isModelReady(voiceFile)) {
+            if (com.sauti.app.sync.ModelDownloadWorker.isValidGgml(voiceFile)) {
                 Log.i(TAG, "Initializing native voice engine with: ${voiceFile.absolutePath} (${voiceFile.length()} bytes)")
                 nativeInitVoiceEngine(sautiVoicePath!!)
             } else {
-                Log.w(TAG, "Voice model not yet ready (not a valid GGUF) at ${voiceFile.absolutePath}")
+                Log.w(TAG, "Voice model not ready (not a valid GGML/Whisper binary) at ${voiceFile.absolutePath}")
             }
-            if (com.sauti.app.sync.ModelDownloadWorker.isModelReady(coreFile)) {
+            if (com.sauti.app.sync.ModelDownloadWorker.isValidGguf(coreFile)) {
                 Log.i(TAG, "Initializing native core engine with: ${coreFile.absolutePath} (${coreFile.length()} bytes)")
                 nativeInitCoreEngine(sautiCorePath!!)
             } else {
-                Log.w(TAG, "Core model not yet ready (not a valid GGUF) at ${coreFile.absolutePath}")
+                Log.w(TAG, "Core model not ready (not a valid GGUF) at ${coreFile.absolutePath}")
             }
         } catch (e: Throwable) {
             Log.w(TAG, "Native engine init: " + e.message)
@@ -359,18 +362,18 @@ object SautiEngineLoader {
         val retrievedContext = if (knowledgeDatabase != null) {
             val chunks = knowledgeDatabase!!.searchKnowledge(clean, maxResults = 2)
             if (chunks.isNotEmpty()) {
-                "\n[MUKTADHA WA NDANI]\n" + chunks.joinToString("\n") + "\n"
+                "\n[MUKTADHA WA NDANI / VERIFIED LOCAL CONTEXT]\n" + chunks.joinToString("\n") + "\n"
             } else ""
         } else ""
 
         val systemLanguageInstruction = """
-            You are Sauti Assistant (Sauti Msaidizi), an authentic sovereign bilingual assistant fluent in Tanzanian Kiswahili and English.
-            Always mirror the language of the user's message:
-            - If the user writes in Kiswahili, reply strictly in fluent, natural Kiswahili as Sauti Msaidizi.
-            - If the user writes in English, reply strictly in natural, concise English as Sauti Assistant.
-            - If the user writes a code-switching mix, reply in authentic Tanzanian Kiswahili while respecting the technical terms.
-            Never refer to yourself as AI. Refer to yourself as Assistant (English) or Msaidizi (Kiswahili).
-            Provide direct, helpful, and accurate answers.
+            You are Sauti Assistant, a helpful sovereign on-device AI assistant.
+            Reply in English by default.
+            If the user writes in Swahili (Kiswahili), reply in Swahili.
+            If the user writes in English, reply in English.
+            If the user writes a mix, reply in English unless Swahili is dominant.
+            Never refer to yourself as AI. Use "Assistant" (English) or "Msaidizi" (Swahili).
+            Be direct, accurate, and concise.
         """.trimIndent()
 
         // Gemma turn template: system prompt is placed directly within the first user turn
@@ -400,14 +403,14 @@ object SautiEngineLoader {
             Log.w(TAG, "Native inference error: " + e.message)
         }
 
-        // If native inference was unavailable or failed to produce tokens (e.g. weights loading/downloading), notify user cleanly
+        // If native inference was unavailable or failed to produce tokens, notify user clearly
         if (!tokensEmitted) {
             val coreFile = sautiCorePath?.let { File(it) }
-            val hasCoreModel = coreFile != null && com.sauti.app.sync.ModelDownloadWorker.isModelReady(coreFile)
+            val hasCoreModel = coreFile != null && coreFile.exists() && coreFile.length() > 1024 * 1024
             if (!hasCoreModel) {
-                trySend("Inatayarisha mfumo wa Sauti. Tafadhali subiri kidogo kisha ujaribu tena.")
+                trySend("The AI model is being downloaded. Please wait for the download to complete, then try again.")
             } else {
-                trySend("Inafungua mfumo, tafadhali subiri...")
+                trySend("Loading model into memory, please wait a moment...")
             }
         }
 

@@ -28,20 +28,20 @@ object SautiNotificationManager {
             // 1. Model download progress channel
             val downloadChannel = NotificationChannel(
                 CHANNEL_DOWNLOAD_ID,
-                "Upakuaji wa Faili",
+                "Model Downloads / Upakuaji wa Mifano",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Inaonyesha maendeleo ya upakuaji"
+                description = "Shows live download progress for offline models"
                 setShowBadge(false)
             }
 
             // 2. Task completion channel
             val completionChannel = NotificationChannel(
                 CHANNEL_COMPLETION_ID,
-                "Taarifa za Sauti",
+                "Assistant Updates / Taarifa za Msaidizi",
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Hutoa taarifa majibu yanapokamilika"
+                description = "Notifies when background requests and reasoning finish"
                 enableVibration(true)
                 setShowBadge(true)
             }
@@ -74,15 +74,15 @@ object SautiNotificationManager {
         )
 
         val title = if (progressPercent in 0..99) {
-            "Inapakua... ($progressPercent%)"
+            "Sauti Msaidizi: Inapakua $modelName ($progressPercent%)"
         } else {
-            "Inakamilisha..."
+            "Sauti Msaidizi: Inakamilisha ufungaji..."
         }
 
         val content = if (totalMb > 0) {
-            "$downloadedMb MB / $totalMb MB"
+            "$downloadedMb MB / $totalMb MB ($progressPercent%)"
         } else {
-            "$downloadedMb MB zimepakuliwa..."
+            "$downloadedMb MB imepakuliwa..."
         }
 
         return NotificationCompat.Builder(context, CHANNEL_DOWNLOAD_ID)

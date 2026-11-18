@@ -44,8 +44,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.airbnb.android.showkase.annotation.ShowkaseComposable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
 import com.sauti.app.tts.TextToSpeechEngine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -97,6 +95,13 @@ fun ChatScreen(
     var streamingMessage by remember { mutableStateOf<ConversationalMessage?>(null) }
     var inputTextFieldValue by remember { mutableStateOf(TextFieldValue("")) }
     var isGenerating by remember { mutableStateOf(false) }
+
+    // Gate voice input on Whisper model readiness
+    val isVoiceReady by produceState(initialValue = false) {
+        val voicePath = com.sauti.app.sauti.SautiEngineLoader.getSautiVoicePath()
+        val voiceFile = voicePath?.let { java.io.File(it) } ?: java.io.File(context.filesDir, "sauti/voice_lite.bin")
+        value = com.sauti.app.sync.ModelDownloadWorker.isValidGgml(voiceFile)
+    }
 
     val displayMessages = remember(persistedMessages, streamingMessage) {
         val list = persistedMessages.map { dbMsg ->
@@ -173,7 +178,7 @@ fun ChatScreen(
                 try {
                     com.sauti.app.notifications.SautiNotificationManager.notifyTaskComplete(
                         context = context,
-                        title = "Sauti",
+                        title = "Sauti Msaidizi / Assistant",
                         previewText = finalResponse
                     )
                 } catch (_: Exception) {}
@@ -330,7 +335,7 @@ fun ChatScreen(
                             decorationBox = { innerTextField ->
                                 if (inputTextFieldValue.text.isEmpty()) {
                                     Text(
-                                        text = "Uliza chochote...",
+                                        text = "Ask Sauti...",
                                         color = colors.onSurfaceVariant,
                                         fontSize = 15.sp
                                     )
@@ -339,14 +344,14 @@ fun ChatScreen(
                             }
                         )
 
-                        // Dictation Microphone Icon
+                        // Dictation Microphone Icon (disabled if Whisper model not yet ready)
                         Icon(
                             imageVector = Icons.Outlined.Mic,
-                            contentDescription = "Speak",
-                            tint = colors.onSurfaceVariant,
+                            contentDescription = if (isVoiceReady) "Speak" else "Voice downloading...",
+                            tint = if (isVoiceReady) colors.onSurfaceVariant else colors.onSurfaceVariant.copy(alpha = 0.38f),
                             modifier = Modifier
                                 .size(22.dp)
-                                .clickable { onVoiceClick() }
+                                .clickable(enabled = isVoiceReady) { onVoiceClick() }
                         )
                     }
                 }
@@ -356,7 +361,7 @@ fun ChatScreen(
                     onClick = {
                         if (inputTextFieldValue.text.isNotBlank()) {
                             submitPrompt(inputTextFieldValue.text)
-                        } else {
+                        } else if (isVoiceReady) {
                             onVoiceClick()
                         }
                     },
@@ -375,77 +380,10 @@ fun ChatScreen(
             }
         }
     ) { innerPadding ->
-
-        // Observe WorkManager download progress for the live banner
-        val workInfoList by produceState<List<androidx.work.WorkInfo>>(initialValue = emptyList(), context) {
-            WorkManager.getInstance(context)
-                .getWorkInfosForUniqueWorkFlow(com.sauti.app.sync.ModelDownloadWorker.WORK_NAME)
-                .collect { value = it }
-        }
-
-        val downloadProgress: Triple<Int, Long, Long>? = remember(workInfoList) {
-            workInfoList.firstOrNull()?.let { info: androidx.work.WorkInfo ->
-                if (info.state == androidx.work.WorkInfo.State.RUNNING) {
-                    val pct    = info.progress.getInt("progress", -1)
-                    val dlMb   = info.progress.getLong("downloaded_mb", 0L)
-                    val totMb  = info.progress.getLong("total_mb", 0L)
-                    if (pct >= 0) Triple(pct, dlMb, totMb) else null
-                } else null
-            }
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            // ── Download progress banner (auto-hides when model is ready) ──────
-            if (downloadProgress != null) {
-                val (pct, dlMb, totMb) = downloadProgress
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = colors.primaryContainer,
-                    tonalElevation = 2.dp
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "Inapakua... ($pct%)",
-                                color = colors.onPrimaryContainer,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = if (totMb > 0) "$dlMb MB / $totMb MB" else "$dlMb MB",
-                                color = colors.onPrimaryContainer.copy(alpha = 0.7f),
-                                fontSize = 12.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        LinearProgressIndicator(
-                            progress = { (pct / 100f).coerceIn(0f, 1f) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(2.dp)),
-                            color = colors.primary,
-                            trackColor = colors.onPrimaryContainer.copy(alpha = 0.2f)
-                        )
-                    }
-                }
-            }
-
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(innerPadding)
         ) {
             if (displayMessages.isEmpty()) {
                 // ── Warm Personalized Welcome Centerpiece ─────────────────────────
@@ -458,7 +396,7 @@ fun ChatScreen(
                 ) {
                     val firstName = userProfile.fullName.trim().split("\\s+".toRegex()).firstOrNull { it.isNotEmpty() } ?: "there"
                     Text(
-                        text = "Habari, $firstName",
+                        text = "Hello, $firstName",
                         color = colors.onBackground,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
@@ -466,7 +404,7 @@ fun ChatScreen(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Nikusaidie nini leo?",
+                        text = "What can I help you explore today?",
                         color = colors.onSurfaceVariant,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Normal
@@ -549,8 +487,7 @@ fun ChatScreen(
                     }
                 }
             }
-        } // end inner Box
-        } // end Column (wrapping banner + content)
+        }
     }
 }
 

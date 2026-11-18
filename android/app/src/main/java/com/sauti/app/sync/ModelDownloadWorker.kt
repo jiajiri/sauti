@@ -58,7 +58,7 @@ class ModelDownloadWorker(
 
         /**
          * Checks first 4 bytes for GGUF magic header (0x47 0x47 0x55 0x46 = "GGUF").
-         * A file that is an encrypted blob will NOT pass this check.
+         * Used for core language models (Gemma, Qwen, etc.).
          */
         fun isValidGguf(file: File): Boolean {
             if (!file.exists() || file.length() < 1024 * 1024) return false
@@ -77,16 +77,38 @@ class ModelDownloadWorker(
         }
 
         /**
-         * Returns true if the file exists and passes the GGUF magic check.
-         * Used by SautiEngineLoader and other callers to know if a model is usable.
+         * Checks first 4 bytes for GGML magic header (0x67 0x67 0x6d 0x6c = "ggml" little-endian "lmgg").
+         * Whisper .bin files use GGML format, NOT GGUF.
+         * Python hexdump confirmed: voice_lite.bin first bytes = 6c 6d 67 67 ("lmgg").
          */
-        fun isModelReady(file: File): Boolean = isValidGguf(file)
+        fun isValidGgml(file: File): Boolean {
+            if (!file.exists() || file.length() < 1024 * 1024) return false
+            return try {
+                file.inputStream().use { s ->
+                    val magic = ByteArray(4)
+                    s.read(magic) == 4 &&
+                        magic[0] == 0x6c.toByte() &&  // 'l'
+                        magic[1] == 0x6d.toByte() &&  // 'm'
+                        magic[2] == 0x67.toByte() &&  // 'g'
+                        magic[3] == 0x67.toByte()     // 'g'
+                }
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        /**
+         * Returns true if the model file is valid based on its type.
+         * Voice models (Whisper) use GGML format; core models use GGUF format.
+         */
+        fun isModelReady(file: File, isVoiceModel: Boolean = false): Boolean =
+            if (isVoiceModel) isValidGgml(file) else isValidGguf(file)
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
         val notification = SautiNotificationManager.createDownloadProgressNotification(
             context = context,
-            modelName = "Sauti",
+            modelName = "Msaidizi",
             progressPercent = 0,
             downloadedMb = 0,
             totalMb = 0
@@ -114,12 +136,12 @@ class ModelDownloadWorker(
         val coreFile = File(sautiDir, "core_pro.bin")
         val coreLiteFile = File(sautiDir, "core_lite.bin")
 
-        // Purge stale corrupt files (raw .enc.gz blobs written by the old buggy worker)
-        purgeCorruptIfNeeded(coreFile)
-        purgeCorruptIfNeeded(coreLiteFile)
-        purgeCorruptIfNeeded(voiceFile)
+        // Purge stale corrupt files — voice uses GGML, cores use GGUF
+        purgeCorruptIfNeeded(coreFile, isVoiceModel = false)
+        purgeCorruptIfNeeded(coreLiteFile, isVoiceModel = false)
+        purgeCorruptIfNeeded(voiceFile, isVoiceModel = true)
 
-        val hasVoice = voiceFile.exists() && isValidGguf(voiceFile)
+        val hasVoice = isValidGgml(voiceFile)
         val hasCore = isValidGguf(coreFile) || isValidGguf(coreLiteFile)
 
         if (hasVoice && hasCore) {
@@ -156,8 +178,11 @@ class ModelDownloadWorker(
                     val isCompressed = mObj.optBoolean("compressed", false)
                     val targetFile   = File(sautiDir, filename)
 
-                    // Skip models that are already valid GGUF
-                    if (isValidGguf(targetFile)) {
+                    // Determine model type: voice models (Whisper) use GGML, cores use GGUF
+                    val isVoiceModel = id.startsWith("voice")
+
+                    // Skip models that are already valid
+                    if (isModelReady(targetFile, isVoiceModel)) {
                         Log.i(TAG, "Model '$id' already valid — skipping download.")
                         continue
                     }
@@ -192,7 +217,7 @@ class ModelDownloadWorker(
                         return Result.retry()
                     }
 
-                    // Step 3: SHA-256 integrity verification of the plaintext GGUF
+                    // Step 3: SHA-256 integrity verification of the plaintext model
                     if (expectedSha.isNotBlank()) {
                         Log.i(TAG, "Verifying SHA-256 for '$id'...")
                         val actualSha = ModelCryptoManager.computeSha256(targetFile)
@@ -204,9 +229,10 @@ class ModelDownloadWorker(
                         Log.i(TAG, "SHA-256 verified OK for '$id'")
                     }
 
-                    // Step 4: Confirm final file is a valid GGUF
-                    if (!isValidGguf(targetFile)) {
-                        Log.e(TAG, "Decrypted file '$filename' is not a valid GGUF — purging and retrying.")
+                    // Step 4: Confirm final file passes the correct magic check for its type
+                    if (!isModelReady(targetFile, isVoiceModel)) {
+                        val expectedFormat = if (isVoiceModel) "GGML (Whisper)" else "GGUF"
+                        Log.e(TAG, "Decrypted '$filename' is not a valid $expectedFormat — purging and retrying.")
                         targetFile.delete()
                         return Result.retry()
                     }
@@ -230,8 +256,8 @@ class ModelDownloadWorker(
             // Notify user that the Assistant is fully ready offline
             SautiNotificationManager.notifyTaskComplete(
                 context = context,
-                title = "Sauti iko tayari",
-                previewText = "Upakuaji umekamilika. Sasa unaweza kutumia Sauti bila mtandao."
+                title = "Sauti Msaidizi tayari / Assistant Ready",
+                previewText = "Mifano imepakuliwa kikamilifu. Sasa unaweza kutumia Sauti bila mtandao!"
             )
 
             Log.i(TAG, "Background model sync completed and verified successfully.")
@@ -244,17 +270,17 @@ class ModelDownloadWorker(
     }
 
     /**
-     * If a file exists but is NOT a valid GGUF (i.e., it is a stale raw .enc.gz blob
-     * written by the previous buggy worker), delete it and any associated .part file
-     * so the correct decrypt pipeline runs fresh.
+     * If a file exists but is NOT a valid model (GGUF for cores, GGML for voice), delete it
+     * and any associated .part file so the correct decrypt pipeline runs fresh.
      */
-    private fun purgeCorruptIfNeeded(file: File) {
-        if (file.exists() && file.length() > 1024 * 1024 && !isValidGguf(file)) {
-            Log.w(TAG, "Stale corrupt model detected at ${file.name} — purging for clean re-download")
+    private fun purgeCorruptIfNeeded(file: File, isVoiceModel: Boolean = false) {
+        if (file.exists() && file.length() > 1024 * 1024 && !isModelReady(file, isVoiceModel)) {
+            Log.w(TAG, "Stale corrupt model at ${file.name} — purging for clean re-download")
             file.delete()
             File(file.parentFile, "${file.name}.enc").delete()
             File(file.parentFile, "${file.name}.enc.part").delete()
             File(file.parentFile, "${file.name}.part").delete()
+            File(file.parentFile, "${file.name}.tmp").delete()
         }
     }
 
