@@ -461,7 +461,7 @@ fun SettingsScreen(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = textSecondary)
                     ) {
-                        Text("Cancel")
+                        Text("Ghairi")
                     }
                     Button(
                         onClick = {
@@ -476,7 +476,7 @@ fun SettingsScreen(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = accentColor)
                     ) {
-                        Text("Save", color = Color.White)
+                        Text("Hifadhi", color = Color.White)
                     }
                 }
             }
@@ -526,7 +526,7 @@ fun SettingsScreen(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = textSecondary)
                     ) {
-                        Text("Cancel")
+                        Text("Ghairi")
                     }
                     Button(
                         onClick = {
@@ -539,7 +539,7 @@ fun SettingsScreen(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = accentColor)
                     ) {
-                        Text("Save", color = Color.White)
+                        Text("Hifadhi", color = Color.White)
                     }
                 }
             }
@@ -552,10 +552,10 @@ fun SettingsScreen(
             onDismissRequest = { showClearDialog = false },
             containerColor = colors.surface,
             title = {
-                Text("Clear All Conversations?", color = textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("Futa Historia Yote?", color = textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             },
             text = {
-                Text("This will permanently erase all local conversation history and start a fresh state.", color = textSecondary, fontSize = 14.sp)
+                Text("Mazungumzo yote ya ndani yatafutwa kabisa na kuanza upya.", color = textSecondary, fontSize = 14.sp)
             },
             confirmButton = {
                 Button(
@@ -565,12 +565,12 @@ fun SettingsScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
                 ) {
-                    Text("Clear All", color = Color.White)
+                    Text("Futa Yote", color = Color.White)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showClearDialog = false }) {
-                    Text("Cancel", color = textSecondary)
+                    Text("Ghairi", color = textSecondary)
                 }
             }
         )

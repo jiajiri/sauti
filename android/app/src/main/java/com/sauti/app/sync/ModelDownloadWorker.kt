@@ -86,7 +86,7 @@ class ModelDownloadWorker(
     override suspend fun getForegroundInfo(): ForegroundInfo {
         val notification = SautiNotificationManager.createDownloadProgressNotification(
             context = context,
-            modelName = "Msaidizi",
+            modelName = "Sauti",
             progressPercent = 0,
             downloadedMb = 0,
             totalMb = 0
@@ -230,8 +230,8 @@ class ModelDownloadWorker(
             // Notify user that the Assistant is fully ready offline
             SautiNotificationManager.notifyTaskComplete(
                 context = context,
-                title = "Sauti Msaidizi tayari / Assistant Ready",
-                previewText = "Mifano imepakuliwa kikamilifu. Sasa unaweza kutumia Sauti bila mtandao!"
+                title = "Sauti iko tayari",
+                previewText = "Upakuaji umekamilika. Sasa unaweza kutumia Sauti bila mtandao."
             )
 
             Log.i(TAG, "Background model sync completed and verified successfully.")

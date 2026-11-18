@@ -173,7 +173,7 @@ fun ChatScreen(
                 try {
                     com.sauti.app.notifications.SautiNotificationManager.notifyTaskComplete(
                         context = context,
-                        title = "Sauti Msaidizi / Assistant",
+                        title = "Sauti",
                         previewText = finalResponse
                     )
                 } catch (_: Exception) {}
@@ -330,7 +330,7 @@ fun ChatScreen(
                             decorationBox = { innerTextField ->
                                 if (inputTextFieldValue.text.isEmpty()) {
                                     Text(
-                                        text = "Ask Sauti...",
+                                        text = "Uliza chochote...",
                                         color = colors.onSurfaceVariant,
                                         fontSize = 15.sp
                                     )
@@ -418,7 +418,7 @@ fun ChatScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Inapakua Msaidizi... ($pct%)",
+                                text = "Inapakua... ($pct%)",
                                 color = colors.onPrimaryContainer,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium
@@ -458,7 +458,7 @@ fun ChatScreen(
                 ) {
                     val firstName = userProfile.fullName.trim().split("\\s+".toRegex()).firstOrNull { it.isNotEmpty() } ?: "there"
                     Text(
-                        text = "Hello, $firstName",
+                        text = "Habari, $firstName",
                         color = colors.onBackground,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
@@ -466,7 +466,7 @@ fun ChatScreen(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "What can I help you explore today?",
+                        text = "Nikusaidie nini leo?",
                         color = colors.onSurfaceVariant,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Normal

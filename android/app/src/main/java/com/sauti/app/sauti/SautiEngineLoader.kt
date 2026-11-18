@@ -359,7 +359,7 @@ object SautiEngineLoader {
         val retrievedContext = if (knowledgeDatabase != null) {
             val chunks = knowledgeDatabase!!.searchKnowledge(clean, maxResults = 2)
             if (chunks.isNotEmpty()) {
-                "\n[MUKTADHA WA NDANI / VERIFIED LOCAL CONTEXT]\n" + chunks.joinToString("\n") + "\n"
+                "\n[MUKTADHA WA NDANI]\n" + chunks.joinToString("\n") + "\n"
             } else ""
         } else ""
 
@@ -403,11 +403,11 @@ object SautiEngineLoader {
         // If native inference was unavailable or failed to produce tokens (e.g. weights loading/downloading), notify user cleanly
         if (!tokensEmitted) {
             val coreFile = sautiCorePath?.let { File(it) }
-            val hasCoreModel = coreFile != null && coreFile.exists() && coreFile.length() > 1024 * 1024
+            val hasCoreModel = coreFile != null && com.sauti.app.sync.ModelDownloadWorker.isModelReady(coreFile)
             if (!hasCoreModel) {
-                trySend("Uzito wa modeli ya Sauti unapakuliwa au kupakiwa kwenye kifaa. Tafadhali subiri kidogo kisha ujaribu tena.")
+                trySend("Inatayarisha mfumo wa Sauti. Tafadhali subiri kidogo kisha ujaribu tena.")
             } else {
-                trySend("Inapakia modeli kwenye kumbukumbu ya kifaa, tafadhali subiri...")
+                trySend("Inafungua mfumo, tafadhali subiri...")
             }
         }
 
