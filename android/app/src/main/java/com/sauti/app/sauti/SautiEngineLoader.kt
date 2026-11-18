@@ -122,9 +122,9 @@ object SautiEngineLoader {
         scanAndImportOfflineModels(context, sautiDir)
 
         // 2. Purge stale corrupt files (raw .enc.gz blobs written by the old worker before decryption was wired)
-        purgeCorruptModelIfNeeded(sautiDir, "core_pro.bin")
-        purgeCorruptModelIfNeeded(sautiDir, "core_lite.bin")
-        purgeCorruptModelIfNeeded(sautiDir, "voice_lite.bin")
+        purgeCorruptModelIfNeeded(sautiDir, "core_pro.bin", isVoiceModel = false)
+        purgeCorruptModelIfNeeded(sautiDir, "core_lite.bin", isVoiceModel = false)
+        purgeCorruptModelIfNeeded(sautiDir, "voice_lite.bin", isVoiceModel = true)
 
         // 3. Schedule background model sync (will safely succeed or be no-op if offline)
         try {
@@ -300,16 +300,17 @@ object SautiEngineLoader {
     }
 
     /**
-     * Deletes a model file if it exists but is NOT a valid GGUF.
+     * Deletes a model file if it exists but is NOT a valid model (GGUF for cores, GGML for voice).
      * This purges stale encrypted blobs written by the old download worker before
      * decryption was wired into the pipeline.
      */
-    private fun purgeCorruptModelIfNeeded(dir: File, filename: String) {
+    private fun purgeCorruptModelIfNeeded(dir: File, filename: String, isVoiceModel: Boolean = false) {
         val file = File(dir, filename)
         if (file.exists() && file.length() > 1024 * 1024 &&
-            !com.sauti.app.sync.ModelDownloadWorker.isModelReady(file)
+            !com.sauti.app.sync.ModelDownloadWorker.isModelReady(file, isVoiceModel)
         ) {
-            Log.w(TAG, "Purging stale corrupt model: $filename (not a valid GGUF — likely raw encrypted blob)")
+            val format = if (isVoiceModel) "GGML (Whisper)" else "GGUF"
+            Log.w(TAG, "Purging stale corrupt model: $filename (not a valid $format)")
             file.delete()
             File(dir, "$filename.enc").delete()
             File(dir, "$filename.part").delete()
