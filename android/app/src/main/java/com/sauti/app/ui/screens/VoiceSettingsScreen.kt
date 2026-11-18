@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -23,16 +24,9 @@ import com.sauti.app.settings.SautiPreferencesStore
 import com.sauti.app.tts.TextToSpeechEngine
 import com.sauti.app.tts.VoicePersona
 
-private val CardDarkBg   = Color(0xFF171717)
-private val DividerColor = Color(0xFF262626)
-private val TextPri      = Color(0xFFFFFFFF)
-private val TextSec      = Color(0xFF9E9E9E)
-private val AccentBlue   = Color(0xFF2563EB)
-private val CircleBtnBg  = Color(0xFF1E1E1E)
-
 /**
- * Dedicated Voice Settings Sub-Screen strictly modeled after Reference 4.
- * Features a single grouped card with trailing chevrons, Material 3 switches, and voice previews.
+ * Dedicated Voice Settings sub-screen.
+ * Colors fully delegated to MaterialTheme so Light, Dark, and Auto themes all render correctly.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,20 +38,27 @@ fun VoiceSettingsScreen(
     val context = LocalContext.current
     val prefs = remember { SautiPreferencesStore(context) }
 
-    var selectedPersona by remember { mutableStateOf(prefs.voicePersona) }
-    var autoSpeak by remember { mutableStateOf(prefs.autoSpeakReplies) }
-    var showPersonaSheet by remember { mutableStateOf(false) }
+    val colors       = MaterialTheme.colorScheme
+    val cardBg       = colors.surface
+    val dividerColor = colors.outline
+    val textPrimary  = colors.onSurface
+    val textSecondary = colors.onSurfaceVariant
+    val accentColor  = colors.primary
+    val circleBtnBg  = colors.surfaceVariant
+
+    var selectedPersona    by remember { mutableStateOf(prefs.voicePersona) }
     var interruptResponses by remember { mutableStateOf(true) }
-    var guidedVision by remember { mutableStateOf(false) }
+    var guidedVision       by remember { mutableStateOf(false) }
+    var showPersonaSheet   by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(colors.background)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        // Top App Bar: Circular back button and centered "Voice" title
+        // Top App Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -69,18 +70,18 @@ fun VoiceSettingsScreen(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(CircleBtnBg)
+                    .background(circleBtnBg)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
                     contentDescription = "Back",
-                    tint = TextPri
+                    tint = textPrimary
                 )
             }
 
             Text(
                 text = "Voice",
-                color = TextPri,
+                color = textPrimary,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
@@ -92,73 +93,84 @@ fun VoiceSettingsScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Grouped Card (Reference 4)
+        // Grouped settings card
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(CardDarkBg)
+                .background(cardBg)
         ) {
-            // Row 1: Sauti's voice
             VoiceSettingNavRow(
                 icon = Icons.Outlined.GraphicEq,
                 title = "Sauti's voice",
                 subtitle = "Choose how Sauti will sound (${selectedPersona.personaName})",
+                textColor = textPrimary,
+                secColor = textSecondary,
                 onClick = { showPersonaSheet = true }
             )
 
-            HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
-            // Row 2: Interrupt Live responses
             VoiceSettingToggleRow(
                 icon = Icons.Outlined.VoiceOverOff,
                 title = "Interrupt Live responses",
                 subtitle = "Talk to interrupt Sauti in Live chats",
                 checked = interruptResponses,
+                accentColor = accentColor,
+                textColor = textPrimary,
+                secColor = textSecondary,
+                surfaceVariant = colors.surfaceVariant,
                 onCheckedChange = { interruptResponses = it }
             )
 
-            HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
-            // Row 3: Caption preferences
-            VoiceSettingExternalRow(
+            // External link row (opens device captions settings)
+            VoiceSettingNavRow(
                 icon = Icons.Outlined.ClosedCaption,
                 title = "Caption preferences",
                 subtitle = "Manage device captions to see text of Sauti's responses",
+                externalLink = true,
+                textColor = textPrimary,
+                secColor = textSecondary,
                 onClick = { /* Device captions trigger */ }
             )
 
-            HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
-            // Row 4: Languages
             VoiceSettingNavRow(
                 icon = Icons.Outlined.Language,
                 title = "Languages",
                 subtitle = "For speaking to Sauti (Auto-detect / Kiswahili / English)",
+                textColor = textPrimary,
+                secColor = textSecondary,
                 onClick = { /* Open language selector */ }
             )
 
-            HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
-            // Row 5: Guided vision / Hands-free background mode
             VoiceSettingToggleRow(
                 icon = Icons.Outlined.Visibility,
                 title = "Guided vision in Live",
                 subtitle = "Hear detailed audio descriptions when using your camera or screen",
                 checked = guidedVision,
+                accentColor = accentColor,
+                textColor = textPrimary,
+                secColor = textSecondary,
+                surfaceVariant = colors.surfaceVariant,
                 onCheckedChange = { guidedVision = it }
             )
         }
     }
 
-    // Persona Selector Bottom Sheet
+    // Voice persona selector bottom sheet
     if (showPersonaSheet) {
         ModalBottomSheet(
             onDismissRequest = { showPersonaSheet = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = Color(0xFF1E1E1E),
-            dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF333333)) }
+            containerColor = colors.surface,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = colors.outline) }
         ) {
             Column(
                 modifier = Modifier
@@ -169,7 +181,7 @@ fun VoiceSettingsScreen(
             ) {
                 Text(
                     text = "Choose Sauti's Voice",
-                    color = TextPri,
+                    color = textPrimary,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -180,7 +192,7 @@ fun VoiceSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSelected) Color(0xFF262626) else Color.Transparent)
+                            .background(if (isSelected) colors.surfaceVariant else Color.Transparent)
                             .clickable {
                                 selectedPersona = persona
                                 prefs.voicePersona = persona
@@ -194,13 +206,13 @@ fun VoiceSettingsScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = persona.personaName,
-                                color = TextPri,
+                                color = textPrimary,
                                 fontSize = 16.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                             )
                             Text(
                                 text = persona.description,
-                                color = TextSec,
+                                color = textSecondary,
                                 fontSize = 13.sp
                             )
                         }
@@ -214,8 +226,8 @@ fun VoiceSettingsScreen(
                                 ttsEngine?.speak("Hujambo, mimi ni ${persona.personaName}. Karibu tuzungumze.")
                             },
                             colors = RadioButtonDefaults.colors(
-                                selectedColor = AccentBlue,
-                                unselectedColor = TextSec
+                                selectedColor = accentColor,
+                                unselectedColor = textSecondary
                             )
                         )
                     }
@@ -227,7 +239,7 @@ fun VoiceSettingsScreen(
                     onClick = { showPersonaSheet = false },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)
+                    colors = ButtonDefaults.buttonColors(containerColor = accentColor)
                 ) {
                     Text("Done", color = Color.White, fontWeight = FontWeight.SemiBold)
                 }
@@ -236,11 +248,16 @@ fun VoiceSettingsScreen(
     }
 }
 
+// ── Navigation/action row (chevron right, or external NorthEast arrow) ────────
+
 @Composable
 private fun VoiceSettingNavRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     title: String,
     subtitle: String,
+    externalLink: Boolean = false,
+    textColor: Color,
+    secColor: Color,
     onClick: () -> Unit
 ) {
     Row(
@@ -250,22 +267,33 @@ private fun VoiceSettingNavRow(
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = TextPri, modifier = Modifier.size(24.dp))
+        Icon(icon, contentDescription = null, tint = textColor, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = TextPri, fontSize = 15.sp, fontWeight = FontWeight.Normal)
-            Text(subtitle, color = TextSec, fontSize = 12.sp)
+            Text(title, color = textColor, fontSize = 15.sp, fontWeight = FontWeight.Normal)
+            Text(subtitle, color = secColor, fontSize = 12.sp)
         }
-        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = TextSec, modifier = Modifier.size(20.dp))
+        Icon(
+            imageVector = if (externalLink) Icons.Outlined.NorthEast else Icons.Outlined.ChevronRight,
+            contentDescription = null,
+            tint = secColor,
+            modifier = Modifier.size(if (externalLink) 18.dp else 20.dp)
+        )
     }
 }
 
+// ── Toggle/switch row ─────────────────────────────────────────────────────────
+
 @Composable
 private fun VoiceSettingToggleRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     title: String,
     subtitle: String,
     checked: Boolean,
+    accentColor: Color,
+    textColor: Color,
+    secColor: Color,
+    surfaceVariant: Color,
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
@@ -274,44 +302,20 @@ private fun VoiceSettingToggleRow(
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = TextPri, modifier = Modifier.size(24.dp))
+        Icon(icon, contentDescription = null, tint = textColor, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = TextPri, fontSize = 15.sp, fontWeight = FontWeight.Normal)
-            Text(subtitle, color = TextSec, fontSize = 12.sp)
+            Text(title, color = textColor, fontSize = 15.sp, fontWeight = FontWeight.Normal)
+            Text(subtitle, color = secColor, fontSize = 12.sp)
         }
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
-                checkedTrackColor = AccentBlue,
-                uncheckedTrackColor = Color(0xFF262626)
+                checkedTrackColor = accentColor,
+                uncheckedTrackColor = surfaceVariant
             )
         )
-    }
-}
-
-@Composable
-private fun VoiceSettingExternalRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, contentDescription = null, tint = TextPri, modifier = Modifier.size(24.dp))
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = TextPri, fontSize = 15.sp, fontWeight = FontWeight.Normal)
-            Text(subtitle, color = TextSec, fontSize = 12.sp)
-        }
-        Icon(Icons.Outlined.NorthEast, contentDescription = null, tint = TextSec, modifier = Modifier.size(18.dp))
     }
 }

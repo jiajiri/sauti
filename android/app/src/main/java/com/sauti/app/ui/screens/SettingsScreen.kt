@@ -156,16 +156,6 @@ fun SettingsScreen(
                     .background(cardBg)
             ) {
                 SettingsActionRow(
-                    icon = Icons.Outlined.Notifications,
-                    title = "Notifications",
-                    textColor = textPrimary,
-                    secColor = textSecondary,
-                    onClick = { /* Notifications */ }
-                )
-
-                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
-
-                SettingsActionRow(
                     icon = Icons.Outlined.Psychology,
                     title = "Assistant Personalization",
                     subtitle = if (customInstructions.isBlank()) "Set custom response style" else "Customized",
@@ -176,47 +166,15 @@ fun SettingsScreen(
 
                 HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
-                SettingsActionRow(
-                    icon = Icons.Outlined.Face,
-                    title = "Avatar",
-                    subtitle = "Sovereign Profile (${currentName.firstOrNull()?.uppercase() ?: "U"})",
+                SettingsThemeRow(
+                    currentTheme = currentTheme,
                     textColor = textPrimary,
                     secColor = textSecondary,
-                    onClick = { showNameDialog = true }
+                    onClick = { showThemeMenu = true }
                 )
 
                 HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
-                SettingsActionRow(
-                    icon = Icons.Outlined.Tune,
-                    title = "Task settings",
-                    textColor = textPrimary,
-                    secColor = textSecondary,
-                    onClick = { /* Task settings */ }
-                )
-
-                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
-
-                // Theme Selector Row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showThemeMenu = true }
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Outlined.DarkMode, contentDescription = null, tint = textPrimary, modifier = Modifier.size(24.dp))
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Text("Theme", color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Normal, modifier = Modifier.weight(1f))
-
-                    Text(currentTheme.displayName, color = textSecondary, fontSize = 14.sp)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Icon(Icons.Outlined.UnfoldMore, contentDescription = null, tint = textSecondary, modifier = Modifier.size(18.dp))
-                }
-
-                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
-
-                // Voice Setting
                 SettingsActionRow(
                     icon = Icons.Outlined.GraphicEq,
                     title = "Voice",
@@ -224,27 +182,6 @@ fun SettingsScreen(
                     textColor = textPrimary,
                     secColor = textSecondary,
                     onClick = { viewModel?.selectWorkspace(SautiWorkspace.VOICE_SETTINGS_WORKSPACE) }
-                )
-
-                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
-
-                SettingsActionRow(
-                    icon = Icons.Outlined.Headphones,
-                    title = "Media",
-                    subtitle = "Hands-free automatic audio routing",
-                    textColor = textPrimary,
-                    secColor = textSecondary,
-                    onClick = { /* Media routing */ }
-                )
-
-                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
-
-                SettingsActionRow(
-                    icon = Icons.Outlined.Devices,
-                    title = "Device controls",
-                    textColor = textPrimary,
-                    secColor = textSecondary,
-                    onClick = { /* Device controls */ }
                 )
             }
 
@@ -281,32 +218,20 @@ fun SettingsScreen(
 
                 HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
-                // Biometric Lock Toggle
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Outlined.Lock, contentDescription = null, tint = textPrimary, modifier = Modifier.size(24.dp))
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("App Lock (Fingerprint / PIN)", color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Normal)
-                        Text("Lock conversations on shared devices", color = textSecondary, fontSize = 12.sp)
+                SettingsSwitchRow(
+                    icon = Icons.Outlined.Lock,
+                    title = "App Lock (Fingerprint / PIN)",
+                    subtitle = "Lock conversations on shared devices",
+                    checked = biometricLock,
+                    accentColor = accentColor,
+                    textColor = textPrimary,
+                    secColor = textSecondary,
+                    surfaceVariant = colors.surfaceVariant,
+                    onCheckedChange = {
+                        biometricLock = it
+                        prefs.biometricLockEnabled = it
                     }
-                    Switch(
-                        checked = biometricLock,
-                        onCheckedChange = {
-                            biometricLock = it
-                            prefs.biometricLockEnabled = it
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = accentColor,
-                            uncheckedTrackColor = colors.surfaceVariant
-                        )
-                    )
-                }
+                )
 
                 HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
 
@@ -442,7 +367,7 @@ fun SettingsScreen(
         }
     }
 
-    // Model Tier Bottom Sheet (Clean without storage footprint size)
+    // Model Tier Bottom Sheet
     if (showModelDialog) {
         ModalBottomSheet(
             onDismissRequest = { showModelDialog = false },
@@ -652,6 +577,71 @@ fun SettingsScreen(
     }
 }
 
+// ── Private composable: Theme selector row ────────────────────────────────────
+
+@Composable
+private fun SettingsThemeRow(
+    currentTheme: AppTheme,
+    textColor: Color,
+    secColor: Color,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Outlined.DarkMode, contentDescription = null, tint = textColor, modifier = Modifier.size(24.dp))
+        Spacer(modifier = Modifier.width(16.dp))
+        Text("Theme", color = textColor, fontSize = 15.sp, fontWeight = FontWeight.Normal, modifier = Modifier.weight(1f))
+        Text(currentTheme.displayName, color = secColor, fontSize = 14.sp)
+        Spacer(modifier = Modifier.width(6.dp))
+        Icon(Icons.Outlined.UnfoldMore, contentDescription = null, tint = secColor, modifier = Modifier.size(18.dp))
+    }
+}
+
+// ── Private composable: Toggle/switch row ─────────────────────────────────────
+
+@Composable
+private fun SettingsSwitchRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    accentColor: Color,
+    textColor: Color,
+    secColor: Color,
+    surfaceVariant: Color,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = textColor, modifier = Modifier.size(24.dp))
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = textColor, fontSize = 15.sp, fontWeight = FontWeight.Normal)
+            Text(subtitle, color = secColor, fontSize = 12.sp)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = accentColor,
+                uncheckedTrackColor = surfaceVariant
+            )
+        )
+    }
+}
+
+// ── Private composable: Section header ───────────────────────────────────────
+
 @Composable
 private fun SettingsSectionHeader(title: String, color: Color) {
     Text(
@@ -662,6 +652,8 @@ private fun SettingsSectionHeader(title: String, color: Color) {
         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
     )
 }
+
+// ── Private composable: Navigation/action row ─────────────────────────────────
 
 @Composable
 private fun SettingsActionRow(
