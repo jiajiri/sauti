@@ -13,15 +13,18 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
-import java.io.RandomAccessFile
 import java.util.concurrent.TimeUnit
 
 /**
- * Resilient background worker that downloads model weights with HTTP Range resumption,
- * live background progress tracking, and atomic finalization.
+ * Resilient background worker that downloads, decrypts, decompresses, and verifies
+ * model weights with HTTP Range resumption, live progress tracking, and atomic finalization.
  *
- * If internet drops or is disconnected, already downloaded bytes are preserved (.part file),
- * and the worker resumes from the exact byte offset when reconnected.
+ * Pipeline per model:
+ *   1. HTTP Range download → filename.part (resumable across network interruptions)
+ *   2. Rename .part → filename.enc (raw encrypted+compressed blob)
+ *   3. AES-256-GCM decrypt + GZIP decompress → plaintext GGUF
+ *   4. SHA-256 integrity verification against manifest hash
+ *   5. Atomic rename → final filename
  */
 class ModelDownloadWorker(
     private val context: Context,
@@ -31,7 +34,7 @@ class ModelDownloadWorker(
     private val TAG = "ModelDownloadWorker"
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(120, TimeUnit.SECONDS)
+        .readTimeout(300, TimeUnit.SECONDS)
         .build()
 
     companion object {
@@ -48,9 +51,36 @@ class ModelDownloadWorker(
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.SECONDS)
                 .build()
 
+            // REPLACE: cancels any stale or failed prior job so a fresh clean run always starts
             WorkManager.getInstance(context)
-                .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.KEEP, workRequest)
+                .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, workRequest)
         }
+
+        /**
+         * Checks first 4 bytes for GGUF magic header (0x47 0x47 0x55 0x46 = "GGUF").
+         * A file that is an encrypted blob will NOT pass this check.
+         */
+        fun isValidGguf(file: File): Boolean {
+            if (!file.exists() || file.length() < 1024 * 1024) return false
+            return try {
+                file.inputStream().use { s ->
+                    val magic = ByteArray(4)
+                    s.read(magic) == 4 &&
+                        magic[0] == 'G'.code.toByte() &&
+                        magic[1] == 'G'.code.toByte() &&
+                        magic[2] == 'U'.code.toByte() &&
+                        magic[3] == 'F'.code.toByte()
+                }
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        /**
+         * Returns true if the file exists and passes the GGUF magic check.
+         * Used by SautiEngineLoader and other callers to know if a model is usable.
+         */
+        fun isModelReady(file: File): Boolean = isValidGguf(file)
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
@@ -80,22 +110,25 @@ class ModelDownloadWorker(
         val sautiDir = File(context.filesDir, "sauti").apply { mkdirs() }
         val key = ModelCryptoManager.deriveAppKey(context)
 
-        // Verify if models already exist locally in private storage
         val voiceFile = File(sautiDir, "voice_lite.bin")
         val coreFile = File(sautiDir, "core_pro.bin")
         val coreLiteFile = File(sautiDir, "core_lite.bin")
 
-        val hasVoice = voiceFile.exists() && voiceFile.length() > 1024 * 1024
-        val hasCore = (coreFile.exists() && coreFile.length() > 1024 * 1024) ||
-                      (coreLiteFile.exists() && coreLiteFile.length() > 1024 * 1024)
+        // Purge stale corrupt files (raw .enc.gz blobs written by the old buggy worker)
+        purgeCorruptIfNeeded(coreFile)
+        purgeCorruptIfNeeded(coreLiteFile)
+        purgeCorruptIfNeeded(voiceFile)
+
+        val hasVoice = voiceFile.exists() && isValidGguf(voiceFile)
+        val hasCore = isValidGguf(coreFile) || isValidGguf(coreLiteFile)
 
         if (hasVoice && hasCore) {
-            Log.i(TAG, "Local models verified present. No download necessary.")
+            Log.i(TAG, "Local models verified as valid GGUF. No download necessary.")
             return Result.success()
         }
 
         try {
-            // Set as foreground service to ensure Android does not kill during background downloads
+            // Promote to foreground so Android does not kill during large downloads
             try {
                 setForeground(getForegroundInfo())
             } catch (e: Exception) {
@@ -106,47 +139,104 @@ class ModelDownloadWorker(
             val manifestRequest = Request.Builder().url(MANIFEST_URL).build()
             client.newCall(manifestRequest).execute().use { response ->
                 if (!response.isSuccessful) {
-                    Log.w(TAG, "Remote manifest unavailable (HTTP ${response.code}). Will retry when network permits.")
+                    Log.w(TAG, "Remote manifest unavailable (HTTP ${response.code}). Will retry.")
                     return Result.retry()
                 }
 
                 val body = response.body?.string() ?: return Result.retry()
                 val json = JSONObject(body)
-                val modelsArray = json.optJSONArray("models")
+                val modelsArray = json.optJSONArray("models") ?: return Result.retry()
 
-                if (modelsArray != null) {
-                    for (i in 0 until modelsArray.length()) {
-                        val mObj = modelsArray.getJSONObject(i)
-                        val id = mObj.optString("id")
-                        val filename = mObj.optString("filename")
-                        val remoteUrl = mObj.optString("remote_url")
-                        val targetFile = File(sautiDir, filename)
+                for (i in 0 until modelsArray.length()) {
+                    val mObj = modelsArray.getJSONObject(i)
+                    val id           = mObj.optString("id")
+                    val filename     = mObj.optString("filename")
+                    val remoteUrl    = mObj.optString("remote_url")
+                    val expectedSha  = mObj.optString("sha256")
+                    val isCompressed = mObj.optBoolean("compressed", false)
+                    val targetFile   = File(sautiDir, filename)
 
-                        if (!targetFile.exists() || targetFile.length() < 1024 * 1024) {
-                            Log.i(TAG, "Starting resilient download for '$id' from: $remoteUrl")
-                            val success = downloadWithResumption(remoteUrl, targetFile, id)
-                            if (!success) {
-                                Log.w(TAG, "Download interrupted for '$id', saved progress for next retry.")
-                                return Result.retry()
-                            }
-                        }
+                    // Skip models that are already valid GGUF
+                    if (isValidGguf(targetFile)) {
+                        Log.i(TAG, "Model '$id' already valid — skipping download.")
+                        continue
                     }
+
+                    Log.i(TAG, "Starting resilient download for '$id' → $filename from $remoteUrl")
+
+                    // Step 1: Download the raw encrypted blob into a .enc.part file
+                    val encFile = File(sautiDir, "$filename.enc")
+                    val success = downloadWithResumption(remoteUrl, encFile, id)
+                    if (!success) {
+                        Log.w(TAG, "Download interrupted for '$id', saved progress for next retry.")
+                        return Result.retry()
+                    }
+
+                    // Step 2: Decrypt + decompress the downloaded blob into the final target file
+                    Log.i(TAG, "Decrypting '$id' (gzip=$isCompressed)...")
+                    val decryptOk = encFile.inputStream().use { stream ->
+                        ModelCryptoManager.decryptStream(
+                            encryptedStream = stream,
+                            targetFile = targetFile,
+                            key = key,
+                            isGzipCompressed = isCompressed
+                        )
+                    }
+
+                    // Clean up the intermediate encrypted blob regardless of outcome
+                    encFile.delete()
+
+                    if (!decryptOk) {
+                        Log.e(TAG, "Decryption failed for '$id' — purging and retrying.")
+                        targetFile.delete()
+                        return Result.retry()
+                    }
+
+                    // Step 3: SHA-256 integrity verification of the plaintext GGUF
+                    if (expectedSha.isNotBlank()) {
+                        Log.i(TAG, "Verifying SHA-256 for '$id'...")
+                        val actualSha = ModelCryptoManager.computeSha256(targetFile)
+                        if (actualSha != expectedSha) {
+                            Log.e(TAG, "SHA-256 mismatch for '$id': expected=$expectedSha actual=$actualSha")
+                            targetFile.delete()
+                            return Result.retry()
+                        }
+                        Log.i(TAG, "SHA-256 verified OK for '$id'")
+                    }
+
+                    // Step 4: Confirm final file is a valid GGUF
+                    if (!isValidGguf(targetFile)) {
+                        Log.e(TAG, "Decrypted file '$filename' is not a valid GGUF — purging and retrying.")
+                        targetFile.delete()
+                        return Result.retry()
+                    }
+
+                    Log.i(TAG, "Model '$id' installed successfully: ${targetFile.length()} bytes")
+
+                    // Update progress to 100% for this model
+                    setProgress(workDataOf(
+                        "progress" to 100,
+                        "downloaded_mb" to (targetFile.length() / (1024 * 1024)),
+                        "total_mb" to (targetFile.length() / (1024 * 1024)),
+                        "model_name" to id
+                    ))
                 }
             }
 
-            // Remove download notification when completed
+            // All models ready: cancel the download progress notification
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.cancel(SautiNotificationManager.DOWNLOAD_NOTIFICATION_ID)
 
-            // Notify user that Assistant is ready offline
+            // Notify user that the Assistant is fully ready offline
             SautiNotificationManager.notifyTaskComplete(
                 context = context,
-                title = "Sauti Msaidizi / Assistant",
+                title = "Sauti Msaidizi tayari / Assistant Ready",
                 previewText = "Mifano imepakuliwa kikamilifu. Sasa unaweza kutumia Sauti bila mtandao!"
             )
 
-            Log.i(TAG, "Background model sync completed successfully.")
+            Log.i(TAG, "Background model sync completed and verified successfully.")
             return Result.success()
+
         } catch (e: Exception) {
             Log.w(TAG, "Background sync paused or network disconnected: ${e.message}")
             return Result.retry()
@@ -154,21 +244,36 @@ class ModelDownloadWorker(
     }
 
     /**
-     * Downloads file in chunks with HTTP Range support.
-     * Retains partial file (targetFile.part) on network failure so downloads resume smoothly.
+     * If a file exists but is NOT a valid GGUF (i.e., it is a stale raw .enc.gz blob
+     * written by the previous buggy worker), delete it and any associated .part file
+     * so the correct decrypt pipeline runs fresh.
+     */
+    private fun purgeCorruptIfNeeded(file: File) {
+        if (file.exists() && file.length() > 1024 * 1024 && !isValidGguf(file)) {
+            Log.w(TAG, "Stale corrupt model detected at ${file.name} — purging for clean re-download")
+            file.delete()
+            File(file.parentFile, "${file.name}.enc").delete()
+            File(file.parentFile, "${file.name}.enc.part").delete()
+            File(file.parentFile, "${file.name}.part").delete()
+        }
+    }
+
+    /**
+     * Downloads the encrypted blob in chunks with HTTP Range support.
+     * Uses a .enc.part temporary file so partial progress is preserved on network failure.
      */
     private suspend fun downloadWithResumption(
         url: String,
-        targetFile: File,
+        targetEncFile: File,
         displayName: String
     ): Boolean {
-        val partFile = File(targetFile.parentFile, "${targetFile.name}.part")
+        val partFile = File(targetEncFile.parentFile, "${targetEncFile.name}.part")
         val existingBytes = if (partFile.exists()) partFile.length() else 0L
 
         val requestBuilder = Request.Builder().url(url)
         if (existingBytes > 0) {
             requestBuilder.addHeader("Range", "bytes=$existingBytes-")
-            Log.i(TAG, "Resuming download from byte offset: $existingBytes for ${targetFile.name}")
+            Log.i(TAG, "Resuming download from byte $existingBytes for ${targetEncFile.name}")
         }
 
         try {
@@ -205,7 +310,7 @@ class ModelDownloadWorker(
                             val downloadedMb = totalDownloaded / (1024 * 1024)
                             val totalMb = totalBytes / (1024 * 1024)
 
-                            // Update WorkManager progress state
+                            // Publish live progress to WorkManager observers (ChatScreen banner)
                             setProgress(workDataOf(
                                 "progress" to percent,
                                 "downloaded_mb" to downloadedMb,
@@ -213,7 +318,7 @@ class ModelDownloadWorker(
                                 "model_name" to displayName
                             ))
 
-                            // Update persistent notification
+                            // Update persistent status bar notification
                             val notification = SautiNotificationManager.createDownloadProgressNotification(
                                 context = context,
                                 modelName = displayName,
@@ -229,16 +334,16 @@ class ModelDownloadWorker(
                 }
                 fos.close()
 
-                // Download completed: atomically rename .part to final target
+                // Rename .part to final encrypted blob file
                 if (partFile.exists() && partFile.length() > 1024 * 1024) {
-                    if (targetFile.exists()) targetFile.delete()
-                    partFile.renameTo(targetFile)
-                    Log.i(TAG, "Download and verification complete: ${targetFile.name} (${targetFile.length()} bytes)")
+                    if (targetEncFile.exists()) targetEncFile.delete()
+                    partFile.renameTo(targetEncFile)
+                    Log.i(TAG, "Download complete: ${targetEncFile.name} (${targetEncFile.length()} bytes)")
                     return true
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Download stream interrupted for ${targetFile.name}: ${e.message}")
+            Log.w(TAG, "Download stream interrupted for ${targetEncFile.name}: ${e.message}")
         }
         return false
     }

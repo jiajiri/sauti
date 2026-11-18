@@ -121,7 +121,12 @@ object SautiEngineLoader {
         // 1. Scan external offline storage directories for pre-loaded models
         scanAndImportOfflineModels(context, sautiDir)
 
-        // 2. Schedule background model sync (will safely succeed or be no-op if offline)
+        // 2. Purge stale corrupt files (raw .enc.gz blobs written by the old worker before decryption was wired)
+        purgeCorruptModelIfNeeded(sautiDir, "core_pro.bin")
+        purgeCorruptModelIfNeeded(sautiDir, "core_lite.bin")
+        purgeCorruptModelIfNeeded(sautiDir, "voice_lite.bin")
+
+        // 3. Schedule background model sync (will safely succeed or be no-op if offline)
         try {
             com.sauti.app.sync.ModelDownloadWorker.schedule(context)
         } catch (e: Throwable) {
@@ -133,13 +138,14 @@ object SautiEngineLoader {
             copyAssetToFile(context, ASSET_SAUTI_VOICE_LITE, voiceFile)
         }
 
-        // Check for core_lite or core_pro
+        // Check for valid GGUF core_pro or core_lite
         var coreFile = File(sautiDir, "core_pro.bin")
-        if (!coreFile.exists() || coreFile.length() == 0L) {
+        if (!com.sauti.app.sync.ModelDownloadWorker.isModelReady(coreFile)) {
             val liteFile = File(sautiDir, "core_lite.bin")
-            if (liteFile.exists() && liteFile.length() > 0L) {
+            if (com.sauti.app.sync.ModelDownloadWorker.isModelReady(liteFile)) {
                 coreFile = liteFile
             } else {
+                // Not present — will be fetched by background worker; try bundled asset as fallback
                 copyAssetToFile(context, ASSET_SAUTI_CORE_LITE, coreFile)
             }
         }
@@ -151,17 +157,17 @@ object SautiEngineLoader {
         initKnowledgeStore(context)
 
         try {
-            if (voiceFile.exists() && voiceFile.length() > 1024 * 1024) {
+            if (com.sauti.app.sync.ModelDownloadWorker.isModelReady(voiceFile)) {
                 Log.i(TAG, "Initializing native voice engine with: ${voiceFile.absolutePath} (${voiceFile.length()} bytes)")
                 nativeInitVoiceEngine(sautiVoicePath!!)
             } else {
-                Log.w(TAG, "Voice model not yet ready at ${voiceFile.absolutePath}")
+                Log.w(TAG, "Voice model not yet ready (not a valid GGUF) at ${voiceFile.absolutePath}")
             }
-            if (coreFile.exists() && coreFile.length() > 1024 * 1024) {
+            if (com.sauti.app.sync.ModelDownloadWorker.isModelReady(coreFile)) {
                 Log.i(TAG, "Initializing native core engine with: ${coreFile.absolutePath} (${coreFile.length()} bytes)")
                 nativeInitCoreEngine(sautiCorePath!!)
             } else {
-                Log.w(TAG, "Core language model not yet ready at ${coreFile.absolutePath}")
+                Log.w(TAG, "Core model not yet ready (not a valid GGUF) at ${coreFile.absolutePath}")
             }
         } catch (e: Throwable) {
             Log.w(TAG, "Native engine init: " + e.message)
@@ -287,6 +293,24 @@ object SautiEngineLoader {
         } catch (e: Exception) {
             Log.e(TAG, "Error importing offline model: ${e.message}")
             false
+        }
+    }
+
+    /**
+     * Deletes a model file if it exists but is NOT a valid GGUF.
+     * This purges stale encrypted blobs written by the old download worker before
+     * decryption was wired into the pipeline.
+     */
+    private fun purgeCorruptModelIfNeeded(dir: File, filename: String) {
+        val file = File(dir, filename)
+        if (file.exists() && file.length() > 1024 * 1024 &&
+            !com.sauti.app.sync.ModelDownloadWorker.isModelReady(file)
+        ) {
+            Log.w(TAG, "Purging stale corrupt model: $filename (not a valid GGUF — likely raw encrypted blob)")
+            file.delete()
+            File(dir, "$filename.enc").delete()
+            File(dir, "$filename.part").delete()
+            File(dir, "$filename.enc.part").delete()
         }
     }
 

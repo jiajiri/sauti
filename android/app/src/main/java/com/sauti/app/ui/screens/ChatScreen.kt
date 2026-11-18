@@ -44,6 +44,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.airbnb.android.showkase.annotation.ShowkaseComposable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.sauti.app.tts.TextToSpeechEngine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -373,10 +375,77 @@ fun ChatScreen(
             }
         }
     ) { innerPadding ->
-        Box(
+
+        // Observe WorkManager download progress for the live banner
+        val workInfoList by produceState<List<androidx.work.WorkInfo>>(initialValue = emptyList(), context) {
+            WorkManager.getInstance(context)
+                .getWorkInfosForUniqueWorkFlow(com.sauti.app.sync.ModelDownloadWorker.WORK_NAME)
+                .collect { value = it }
+        }
+
+        val downloadProgress: Triple<Int, Long, Long>? = remember(workInfoList) {
+            workInfoList.firstOrNull()?.let { info: androidx.work.WorkInfo ->
+                if (info.state == androidx.work.WorkInfo.State.RUNNING) {
+                    val pct    = info.progress.getInt("progress", -1)
+                    val dlMb   = info.progress.getLong("downloaded_mb", 0L)
+                    val totMb  = info.progress.getLong("total_mb", 0L)
+                    if (pct >= 0) Triple(pct, dlMb, totMb) else null
+                } else null
+            }
+        }
+
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+        ) {
+            // ── Download progress banner (auto-hides when model is ready) ──────
+            if (downloadProgress != null) {
+                val (pct, dlMb, totMb) = downloadProgress
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = colors.primaryContainer,
+                    tonalElevation = 2.dp
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Inapakua Msaidizi... ($pct%)",
+                                color = colors.onPrimaryContainer,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = if (totMb > 0) "$dlMb MB / $totMb MB" else "$dlMb MB",
+                                color = colors.onPrimaryContainer.copy(alpha = 0.7f),
+                                fontSize = 12.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { (pct / 100f).coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = colors.primary,
+                            trackColor = colors.onPrimaryContainer.copy(alpha = 0.2f)
+                        )
+                    }
+                }
+            }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
         ) {
             if (displayMessages.isEmpty()) {
                 // ── Warm Personalized Welcome Centerpiece ─────────────────────────
@@ -480,7 +549,8 @@ fun ChatScreen(
                     }
                 }
             }
-        }
+        } // end inner Box
+        } // end Column (wrapping banner + content)
     }
 }
 
