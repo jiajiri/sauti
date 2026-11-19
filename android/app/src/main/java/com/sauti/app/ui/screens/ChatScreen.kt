@@ -22,9 +22,17 @@ import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -204,6 +212,26 @@ fun ChatScreen(
 
     val colors = MaterialTheme.colorScheme
 
+    // Observe WorkManager download progress for the live banner
+    val workInfoList by produceState<List<WorkInfo>>(initialValue = emptyList(), context) {
+        WorkManager.getInstance(context)
+            .getWorkInfosForUniqueWorkFlow(com.sauti.app.sync.ModelDownloadWorker.WORK_NAME)
+            .collect { value = it }
+    }
+
+    val downloadProgress: Triple<Int, Long, Long>? = remember(workInfoList) {
+        workInfoList.firstOrNull()?.let { info: WorkInfo ->
+            if (info.state == WorkInfo.State.RUNNING) {
+                val pct = info.progress.getInt("progress", -1)
+                val dlMb = info.progress.getLong("downloaded_mb", 0L)
+                val totMb = info.progress.getLong("total_mb", 0L)
+                if (pct >= 0) Triple(pct, dlMb, totMb) else null
+            } else null
+        }
+    }
+
+    val systemLang = remember { com.sauti.app.notifications.SautiNotificationManager.resolveSystemLanguage(context) }
+
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -380,110 +408,166 @@ fun ChatScreen(
             }
         }
     ) { innerPadding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (displayMessages.isEmpty()) {
-                // ── Warm Personalized Welcome Centerpiece ─────────────────────────
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+            // ── Localized Download Progress Banner (auto-hides when complete) ───
+            if (downloadProgress != null) {
+                val (pct, dlMb, totMb) = downloadProgress
+                val isSw = systemLang == "sw"
+                val bannerTitle = if (isSw) {
+                    "Inapakua Msaidizi... ($pct%)"
+                } else {
+                    "Downloading Assistant... ($pct%)"
+                }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = colors.primaryContainer,
+                    tonalElevation = 2.dp
                 ) {
-                    val firstName = userProfile.fullName.trim().split("\\s+".toRegex()).firstOrNull { it.isNotEmpty() } ?: "there"
-                    Text(
-                        text = "Hello, $firstName",
-                        color = colors.onBackground,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.5).sp
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "What can I help you explore today?",
-                        color = colors.onSurfaceVariant,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Normal
-                    )
-
-                    Spacer(modifier = Modifier.height(28.dp))
-
-                    // Row 1: Smooth Infinite Scrolling Chips (Drifting Left)
-                    AutoScrollingChipRow(
-                        items = listOf(
-                            Triple(Icons.Outlined.Translate, "Learn Swahili", "Hujambo Sauti, nifundishe misemo ya kawaida ya Kiswahili kwa urahisi."),
-                            Triple(Icons.Outlined.Create, "Create poem", "Nitungie shairi zuri lenye vina kuhusu amani na upendo."),
-                            Triple(Icons.Outlined.Lightbulb, "Brainstorm ideas", "Nipe mawazo mapya ya kuanzisha mradi mdogo wa kidijitali."),
-                            Triple(Icons.Outlined.MusicNote, "Stories & folklore", "Niambie hadithi fupi ya kusisimua ya utamaduni wa pwani.")
-                        ),
-                        scrollDirection = 1, // Drifting left
-                        onItemClick = { submitPrompt(it) }
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Row 2: Smooth Infinite Scrolling Chips (Drifting Right)
-                    AutoScrollingChipRow(
-                        items = listOf(
-                            Triple(Icons.Outlined.Code, "Write code", "Andika function ya Python inayopanga data haraka."),
-                            Triple(Icons.Outlined.Description, "Draft document", "Andika barua rasmi ya kuomba kazi kwa lugha ya kitaalamu."),
-                            Triple(Icons.Outlined.Summarize, "Summarize notes", "Fafanua kwa ufupi mambo makuu ya kuzingatia unapoanza biashara."),
-                            Triple(Icons.Outlined.Psychology, "Quick advice", "Nipe ushauri mzuri wa kupanga muda wangu wa siku.")
-                        ),
-                        scrollDirection = -1, // Drifting right
-                        onItemClick = { submitPrompt(it) }
-                    )
-
-                    Spacer(modifier = Modifier.height(28.dp))
-
-                    // Centered Pill CTA Button
-                    Button(
-                        onClick = { submitPrompt("Niambie jinsi unavyoweza kunisaidia leo kama msaidizi wa kibinafsi.") },
-                        shape = RoundedCornerShape(24.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colors.surfaceVariant,
-                            contentColor = colors.onSurface
-                        ),
-                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
                     ) {
-                        Text(
-                            text = "Explore tasks",
-                            color = colors.onSurface,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = bannerTitle,
+                                color = colors.onPrimaryContainer,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = if (totMb > 0) "$dlMb MB / $totMb MB" else "$dlMb MB",
+                                color = colors.onPrimaryContainer.copy(alpha = 0.7f),
+                                fontSize = 12.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            progress = { (pct / 100f).coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = colors.primary,
+                            trackColor = colors.onPrimaryContainer.copy(alpha = 0.2f)
                         )
                     }
                 }
-            } else {
-                // ── Conversational Message Feed ───────────────────────────────────
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(top = 12.dp, bottom = 16.dp)
-                ) {
-                    items(displayMessages, key = { it.id }) { msg ->
-                        MessageBubbleRow(
-                            message = msg,
-                            onSpeakClick = { ttsEngine.speak(msg.text) },
-                            onEditClick = {
-                                inputTextFieldValue = TextFieldValue(
-                                    text = msg.text,
-                                    selection = TextRange(msg.text.length)
-                                )
-                                coroutineScope.launch {
-                                    try {
-                                        focusRequester.requestFocus()
-                                    } catch (_: Exception) {}
-                                }
-                            }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f)
+            ) {
+                if (displayMessages.isEmpty()) {
+                    // ── Warm Personalized Welcome Centerpiece ─────────────────────────
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        val firstName = userProfile.fullName.trim().split("\\s+".toRegex()).firstOrNull { it.isNotEmpty() } ?: "there"
+                        Text(
+                            text = "Hello, $firstName",
+                            color = colors.onBackground,
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.5).sp
                         )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "What can I help you explore today?",
+                            color = colors.onSurfaceVariant,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Normal
+                        )
+
+                        Spacer(modifier = Modifier.height(28.dp))
+
+                        // Row 1: Smooth Infinite Scrolling Chips (Drifting Left)
+                        AutoScrollingChipRow(
+                            items = listOf(
+                                Triple(Icons.Outlined.Translate, "Learn Swahili", "Hujambo Sauti, nifundishe misemo ya kawaida ya Kiswahili kwa urahisi."),
+                                Triple(Icons.Outlined.Create, "Create poem", "Nitungie shairi zuri lenye vina kuhusu amani na upendo."),
+                                Triple(Icons.Outlined.Lightbulb, "Brainstorm ideas", "Nipe mawazo mapya ya kuanzisha mradi mdogo wa kidijitali."),
+                                Triple(Icons.Outlined.MusicNote, "Stories & folklore", "Niambie hadithi fupi ya kusisimua ya utamaduni wa pwani.")
+                            ),
+                            scrollDirection = 1, // Drifting left
+                            onItemClick = { submitPrompt(it) }
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Row 2: Smooth Infinite Scrolling Chips (Drifting Right)
+                        AutoScrollingChipRow(
+                            items = listOf(
+                                Triple(Icons.Outlined.Code, "Write code", "Andika function ya Python inayopanga data haraka."),
+                                Triple(Icons.Outlined.Description, "Draft document", "Andika barua rasmi ya kuomba kazi kwa lugha ya kitaalamu."),
+                                Triple(Icons.Outlined.Summarize, "Summarize notes", "Fafanua kwa ufupi mambo makuu ya kuzingatia unapoanza biashara."),
+                                Triple(Icons.Outlined.Psychology, "Quick advice", "Nipe ushauri mzuri wa kupanga muda wangu wa siku.")
+                            ),
+                            scrollDirection = -1, // Drifting right
+                            onItemClick = { submitPrompt(it) }
+                        )
+
+                        Spacer(modifier = Modifier.height(28.dp))
+
+                        // Centered Pill CTA Button
+                        Button(
+                            onClick = { submitPrompt("Niambie jinsi unavyoweza kunisaidia leo kama msaidizi wa kibinafsi.") },
+                            shape = RoundedCornerShape(24.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.surfaceVariant,
+                                contentColor = colors.onSurface
+                            ),
+                            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                        ) {
+                            Text(
+                                text = "Explore tasks",
+                                color = colors.onSurface,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                } else {
+                    // ── Conversational Message Feed ───────────────────────────────────
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(top = 12.dp, bottom = 16.dp)
+                    ) {
+                        items(displayMessages, key = { it.id }) { msg ->
+                            MessageBubbleRow(
+                                message = msg,
+                                onSpeakClick = { ttsEngine.speak(msg.text) },
+                                onEditClick = {
+                                    inputTextFieldValue = TextFieldValue(
+                                        text = msg.text,
+                                        selection = TextRange(msg.text.length)
+                                    )
+                                    coroutineScope.launch {
+                                        try {
+                                            focusRequester.requestFocus()
+                                        } catch (_: Exception) {}
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -852,6 +936,29 @@ internal fun MessageBubbleRow(
                         color = colors.onSurface,
                         fontSize = 15.sp,
                         lineHeight = 22.sp
+                    )
+                } else if (message.text.isBlank() && message.isStreaming) {
+                    // ── Active Background Generating State Bubble ──────────────────
+                    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+                    val pulseAlpha by infiniteTransition.animateFloat(
+                        initialValue = 0.45f,
+                        targetValue = 1.0f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(durationMillis = 850),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "pulseAlpha"
+                    )
+
+                    val isSw = com.sauti.app.notifications.SautiNotificationManager.resolveSystemLanguage(context) == "sw"
+                    val generatingLabel = if (isSw) "Inatengeneza jibu..." else "Generating response..."
+
+                    Text(
+                        text = generatingLabel,
+                        color = colors.onSurfaceVariant.copy(alpha = pulseAlpha),
+                        fontSize = 14.5.sp,
+                        fontStyle = FontStyle.Italic,
+                        lineHeight = 20.sp
                     )
                 } else {
                     blocks.forEachIndexed { index, block ->

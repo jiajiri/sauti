@@ -447,9 +447,9 @@ object SautiEngineLoader {
             val hasCoreModel = coreFile != null && coreFile.exists() && coreFile.length() > 1024 * 1024
             if (!hasCoreModel) {
                 if (detectedLang == "sw") {
-                    trySend("Modeli ya akili bado inapakuliwa. Tafadhali subiri upakuaji ukamilike kisha ujaribu tena.")
+                    trySend("Modeli ya akili bado inapakuliwa chinichini. Tafadhali subiri upakuaji ukamilike kisha ujaribu tena.")
                 } else {
-                    trySend("The AI model is being downloaded. Please wait for the download to complete, then try again.")
+                    trySend("The AI model is being downloaded in the background. Please wait for the download to complete, then try again.")
                 }
             } else {
                 if (detectedLang == "sw") {

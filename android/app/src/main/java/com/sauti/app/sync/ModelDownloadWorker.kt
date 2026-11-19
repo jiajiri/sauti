@@ -106,12 +106,15 @@ class ModelDownloadWorker(
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
+        val lang = SautiNotificationManager.resolveSystemLanguage(context)
+        val defaultModelName = if (lang == "sw") "Msaidizi" else "Assistant"
         val notification = SautiNotificationManager.createDownloadProgressNotification(
             context = context,
-            modelName = "Msaidizi",
+            modelName = defaultModelName,
             progressPercent = 0,
             downloadedMb = 0,
-            totalMb = 0
+            totalMb = 0,
+            lang = lang
         )
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ForegroundInfo(
@@ -344,13 +347,15 @@ class ModelDownloadWorker(
                                 "model_name" to displayName
                             ))
 
-                            // Update persistent status bar notification
+                            // Update persistent status bar notification with active language
+                            val lang = SautiNotificationManager.resolveSystemLanguage(context)
                             val notification = SautiNotificationManager.createDownloadProgressNotification(
                                 context = context,
                                 modelName = displayName,
                                 progressPercent = percent,
                                 downloadedMb = downloadedMb,
-                                totalMb = totalMb
+                                totalMb = totalMb,
+                                lang = lang
                             )
                             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                             notificationManager.notify(SautiNotificationManager.DOWNLOAD_NOTIFICATION_ID, notification)

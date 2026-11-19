@@ -52,14 +52,30 @@ object SautiNotificationManager {
     }
 
     /**
+     * Resolves active language ("en" or "sw") based on system locale.
+     */
+    fun resolveSystemLanguage(context: Context): String {
+        val locale = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            context.resources.configuration.locales.get(0)
+        } else {
+            @Suppress("DEPRECATION")
+            context.resources.configuration.locale
+        } ?: java.util.Locale.getDefault()
+
+        return if (locale.language.equals("sw", ignoreCase = true)) "sw" else "en"
+    }
+
+    /**
      * Builds a progress notification for the ongoing model download.
+     * Supports both English ("en") and Swahili ("sw") localizations.
      */
     fun createDownloadProgressNotification(
         context: Context,
         modelName: String,
         progressPercent: Int,
         downloadedMb: Long,
-        totalMb: Long
+        totalMb: Long,
+        lang: String = resolveSystemLanguage(context)
     ): android.app.Notification {
         ensureNotificationChannels(context)
 
@@ -73,16 +89,34 @@ object SautiNotificationManager {
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
         )
 
-        val title = if (progressPercent in 0..99) {
-            "Sauti Msaidizi: Inapakua $modelName ($progressPercent%)"
+        val isSwahili = lang.equals("sw", ignoreCase = true)
+
+        val title = if (isSwahili) {
+            if (progressPercent in 0..99) {
+                "Sauti Msaidizi: Inapakua $modelName ($progressPercent%)"
+            } else {
+                "Sauti Msaidizi: Inakamilisha usakinishaji..."
+            }
         } else {
-            "Sauti Msaidizi: Inakamilisha ufungaji..."
+            if (progressPercent in 0..99) {
+                "Sauti Assistant: Downloading $modelName ($progressPercent%)"
+            } else {
+                "Sauti Assistant: Finalizing installation..."
+            }
         }
 
-        val content = if (totalMb > 0) {
-            "$downloadedMb MB / $totalMb MB ($progressPercent%)"
+        val content = if (isSwahili) {
+            if (totalMb > 0) {
+                "$downloadedMb MB / $totalMb MB ($progressPercent%)"
+            } else {
+                "$downloadedMb MB imepakuliwa..."
+            }
         } else {
-            "$downloadedMb MB imepakuliwa..."
+            if (totalMb > 0) {
+                "$downloadedMb MB / $totalMb MB ($progressPercent%)"
+            } else {
+                "$downloadedMb MB downloaded..."
+            }
         }
 
         return NotificationCompat.Builder(context, CHANNEL_DOWNLOAD_ID)
