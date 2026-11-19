@@ -680,6 +680,8 @@ sealed interface ContentBlock {
 /**
  * Normalizes raw/malformed model artifacts (<br/>, &lt;br/&gt;, etc.) and splits
  * markdown into structured TextBlock and CodeBlock segments.
+ *
+ * Supports streaming unclosed code fences without dropping into inline code fallbacks.
  */
 internal fun parseMessageBlocks(raw: String): List<ContentBlock> {
     if (raw.isBlank()) return emptyList()
@@ -694,30 +696,63 @@ internal fun parseMessageBlocks(raw: String): List<ContentBlock> {
         .replace(Regex("(?i)&quot;"), "\"")
 
     val blocks = mutableListOf<ContentBlock>()
-    val codeFenceRegex = Regex("(?s)```([a-zA-Z0-9_-]*)[\\r\\n]+(.*?)```")
-    var lastIndex = 0
+    var currentIndex = 0
+    val fenceMarker = "```"
 
-    for (match in codeFenceRegex.findAll(sanitized)) {
-        val start = match.range.first
-        val end = match.range.last + 1
+    while (currentIndex < sanitized.length) {
+        val fenceStart = sanitized.indexOf(fenceMarker, currentIndex)
+        if (fenceStart == -1) {
+            // No more code fences, append remaining text
+            val remainingText = sanitized.substring(currentIndex).trim()
+            if (remainingText.isNotEmpty()) {
+                blocks.add(ContentBlock.TextBlock(remainingText))
+            }
+            break
+        }
 
-        if (start > lastIndex) {
-            val textBefore = sanitized.substring(lastIndex, start).trim()
+        // Add any text before this code fence
+        if (fenceStart > currentIndex) {
+            val textBefore = sanitized.substring(currentIndex, fenceStart).trim()
             if (textBefore.isNotEmpty()) {
                 blocks.add(ContentBlock.TextBlock(textBefore))
             }
         }
 
-        val lang = match.groupValues[1].trim().ifEmpty { "code" }
-        val code = match.groupValues[2].trimEnd()
-        blocks.add(ContentBlock.CodeBlock(language = lang, code = code))
-        lastIndex = end
-    }
+        // Move past opening ```
+        val afterOpeningFence = fenceStart + fenceMarker.length
 
-    if (lastIndex < sanitized.length) {
-        val remainingText = sanitized.substring(lastIndex).trim()
-        if (remainingText.isNotEmpty()) {
-            blocks.add(ContentBlock.TextBlock(remainingText))
+        // Find end of the language tag line (or newline)
+        val newlineAfterTag = sanitized.indexOf('\n', afterOpeningFence)
+        val nextFence = sanitized.indexOf(fenceMarker, afterOpeningFence)
+
+        if (newlineAfterTag != -1 && (nextFence == -1 || newlineAfterTag < nextFence)) {
+            // Language tag is on the same line as opening fence
+            val rawLang = sanitized.substring(afterOpeningFence, newlineAfterTag).trim()
+            val language = if (rawLang.matches(Regex("^[a-zA-Z0-9_#+-]+$"))) rawLang else "code"
+            val codeStart = newlineAfterTag + 1
+
+            if (nextFence != -1) {
+                // Completed closed code block
+                val codeContent = sanitized.substring(codeStart, nextFence).trimEnd()
+                blocks.add(ContentBlock.CodeBlock(language = language, code = codeContent))
+                currentIndex = nextFence + fenceMarker.length
+            } else {
+                // Streaming / unclosed code block (currently being generated)
+                val codeContent = sanitized.substring(codeStart).trimEnd()
+                blocks.add(ContentBlock.CodeBlock(language = language, code = codeContent))
+                break
+            }
+        } else if (nextFence != -1) {
+            // Opening fence has no newline before closing fence (e.g. ```code```)
+            val codeContent = sanitized.substring(afterOpeningFence, nextFence).trim()
+            blocks.add(ContentBlock.CodeBlock(language = "code", code = codeContent))
+            currentIndex = nextFence + fenceMarker.length
+        } else {
+            // Streaming code fence without a newline yet (e.g. user just received "```python")
+            val rawLang = sanitized.substring(afterOpeningFence).trim()
+            val language = if (rawLang.matches(Regex("^[a-zA-Z0-9_#+-]+$"))) rawLang else "code"
+            blocks.add(ContentBlock.CodeBlock(language = language, code = ""))
+            break
         }
     }
 
@@ -768,8 +803,8 @@ private fun FormattedMarkdownText(
             }
 
             val annotated = buildAnnotatedString {
-                // Parse bold (**...**) and inline code (`...`)
-                val tokenRegex = Regex("(\\*\\*.*?\\*\\*|`.*?`)")
+                // Parse bold (**...**) and strict single inline code (`...`) without catching ```
+                val tokenRegex = Regex("(\\*\\*.*?\\*\\*|(?<!`)`[^`\\n]+`(?!`))")
                 var curIdx = 0
                 for (match in tokenRegex.findAll(cleanLine)) {
                     val mStart = match.range.first

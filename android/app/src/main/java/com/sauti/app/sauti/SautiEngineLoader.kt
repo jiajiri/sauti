@@ -408,11 +408,11 @@ object SautiEngineLoader {
             } else ""
         } else ""
 
-        // Concise, token-efficient system instruction with turn-specific deterministic language constraint
+        // Concise, token-efficient system instruction with turn-specific deterministic language & code formatting constraints
         val turnDirective = if (detectedLang == "sw") {
-            "Wewe ni Sauti Msaidizi. Swali hili limeulizwa kwa Kiswahili. Jibu kwa ufasaha na ukamilifu kwa lugha ya Kiswahili pekee. Usitumie Kiingereza."
+            "Wewe ni Sauti Msaidizi. Swali hili limeulizwa kwa Kiswahili. Jibu kwa ufasaha na ukamilifu kwa lugha ya Kiswahili pekee. Usitumie Kiingereza. Unapotoa msimbo au script yoyote ya programu, weka msimbo wote ndani ya vizuizi vya ```lugha na ``` pekee bila kuchanganya maelezo ya maongezi ndani ya mistari ya msimbo."
         } else {
-            "You are Sauti Assistant. This query is asked in English. Answer accurately, completely, and strictly in English. Do not reply in Swahili."
+            "You are Sauti Assistant. This query is asked in English. Answer accurately, completely, and strictly in English. Do not reply in Swahili. When providing code or scripts, isolate executable code cleanly inside standard ```language and ``` blocks without mixing conversational explanations into code lines."
         }
 
         // Gemma turn template: system prompt is placed directly within the first user turn
