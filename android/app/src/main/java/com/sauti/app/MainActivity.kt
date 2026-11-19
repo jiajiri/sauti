@@ -90,15 +90,28 @@ class MainActivity : ComponentActivity() {
         powerManager = PowerHardwareManager(this)
         audioRecorderManager = AudioRecorderManager(this)
 
-        // Request runtime microphone permission if not granted so device audio recording works
+        // Request runtime permissions on startup (Microphone + Notifications on Android 13+)
+        val permissionsToRequest = mutableListOf<String>()
         if (androidx.core.content.ContextCompat.checkSelfPermission(
                 this,
                 android.Manifest.permission.RECORD_AUDIO
             ) != android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
+            permissionsToRequest.add(android.Manifest.permission.RECORD_AUDIO)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    this,
+                    android.Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                permissionsToRequest.add(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+        if (permissionsToRequest.isNotEmpty()) {
             androidx.core.app.ActivityCompat.requestPermissions(
                 this,
-                arrayOf(android.Manifest.permission.RECORD_AUDIO),
+                permissionsToRequest.toTypedArray(),
                 101
             )
         }

@@ -25,14 +25,14 @@ object SautiNotificationManager {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-            // 1. Model download progress channel
+            // 1. Model download progress channel (DEFAULT importance ensures visibility in notification drawer)
             val downloadChannel = NotificationChannel(
                 CHANNEL_DOWNLOAD_ID,
                 "Model Downloads / Upakuaji wa Mifano",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = "Shows live download progress for offline models"
-                setShowBadge(false)
+                setShowBadge(true)
             }
 
             // 2. Task completion channel
@@ -86,14 +86,14 @@ object SautiNotificationManager {
         }
 
         return NotificationCompat.Builder(context, CHANNEL_DOWNLOAD_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_sauti_notification)
             .setContentTitle(title)
             .setContentText(content)
             .setProgress(100, progressPercent.coerceIn(0, 100), totalMb <= 0)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
     }
 
@@ -124,7 +124,7 @@ object SautiNotificationManager {
             .take(120)
 
         val notification = NotificationCompat.Builder(context, CHANNEL_COMPLETION_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_sauti_notification)
             .setContentTitle(title)
             .setContentText(cleanPreview)
             .setStyle(NotificationCompat.BigTextStyle().bigText(cleanPreview))

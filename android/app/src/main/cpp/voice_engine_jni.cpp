@@ -28,12 +28,12 @@ static bool g_sauti_voice_initialized = false;
 static bool g_sauti_core_initialized = false;
 
 // Runtime-configurable inference parameters
-// Tuned for ZERO hallucinations: deterministic sampling, low temp, min-p filtering
+// Tuned for responsive, natural answers without repetition loops
 static struct {
-    float temperature    = 0.15f;
-    int   top_k          = 25;
-    float top_p          = 0.85f;
-    float repeat_penalty = 1.18f;
+    float temperature    = 0.50f;
+    int   top_k          = 40;
+    float top_p          = 0.90f;
+    float repeat_penalty = 1.22f;
     int   max_tokens     = 512;
 } g_inf_params;
 
@@ -73,7 +73,8 @@ static void ensureLlamaModelLoaded() {
     ctx_params.n_ctx = 1024;
     unsigned int hw_threads = std::thread::hardware_concurrency();
     ctx_params.n_threads = (hw_threads > 0) ? std::min(hw_threads, 4u) : 2;
-    ctx_params.n_batch = 512;
+    ctx_params.n_threads_batch = (hw_threads > 0) ? std::min(hw_threads, 4u) : 2;
+    ctx_params.n_batch = 256;
 
     g_llama_context = llama_init_from_model(g_llama_model, ctx_params);
     if (!g_llama_context) {
@@ -339,7 +340,7 @@ Java_com_sauti_app_sauti_SautiEngineLoader_nativeGenerateChatCompletion(
     }
 
     // Production LLMOps Sampling Pipeline (uses runtime-configurable g_inf_params):
-    // 1. Penalties sampler: penalizes repeated n-grams using g_inf_params.repeat_penalty
+    // 1. Penalties sampler: penalizes repeated n-grams over a 256-token context window
     // 2. Top-K filtering using g_inf_params.top_k
     // 3. Top-P nucleus filtering using g_inf_params.top_p
     // 4. Min-P filtering (p=0.05) to eliminate long-tail hallucination tokens
@@ -349,7 +350,7 @@ Java_com_sauti_app_sauti_SautiEngineLoader_nativeGenerateChatCompletion(
     llama_sampler* smpl = llama_sampler_chain_init(sparams);
 
     const int32_t n_vocab = llama_vocab_n_tokens(vocab);
-    llama_sampler_chain_add(smpl, llama_sampler_init_penalties(n_vocab, 64, g_inf_params.repeat_penalty, 0.50f, 0.30f));
+    llama_sampler_chain_add(smpl, llama_sampler_init_penalties(n_vocab, 256, g_inf_params.repeat_penalty, 0.40f, 0.40f));
     llama_sampler_chain_add(smpl, llama_sampler_init_top_k(g_inf_params.top_k));
     llama_sampler_chain_add(smpl, llama_sampler_init_top_p(g_inf_params.top_p, 1));
     llama_sampler_chain_add(smpl, llama_sampler_init_min_p(0.05f, 1));

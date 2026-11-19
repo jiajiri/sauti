@@ -353,42 +353,79 @@ object SautiEngineLoader {
     }
 
     /**
-     * Streams tokens from on-device model using Gemma turn-based template formatting, strict language mirroring, and RAG context injection:
+     * Fast, lightweight on-device language detector.
+     * Evaluates lexical tokens and morphological markers to deterministically identify
+     * Swahili ("sw") vs English ("en") inputs.
+     */
+    fun detectLanguage(text: String): String {
+        val clean = text.lowercase().trim()
+        val words = clean.split("\\s+".toRegex()).map { it.trim('.', ',', '!', '?', ';', ':', '"', '\'', '(', ')') }
+        if (words.isEmpty()) return "en"
+
+        val swWords = setOf(
+            "habari", "hujambo", "sijambo", "naomba", "tafadhali", "nifundishe", "misemo", "kazi",
+            "barua", "mambo", "vipi", "nini", "gani", "kwa", "katika", "yangu", "yake", "wangu",
+            "wake", "kama", "hapa", "kuna", "ndiyo", "hapana", "asante", "shikamoo", "marahaba",
+            "jinsi", "sababu", "nzuri", "mbaya", "mtu", "watu", "kitu", "vitu", "sana", "leo", "kesho",
+            "jana", "sasa", "bado", "zaidi", "kidogo", "pamoja", "maana", "eleza", "andika"
+        )
+        val enWords = setOf(
+            "the", "is", "are", "and", "in", "to", "what", "how", "why", "when", "where", "who",
+            "which", "can", "you", "please", "tell", "me", "write", "code", "issue", "troubleshoot",
+            "for", "with", "about", "help", "good", "morning", "hello", "hi", "explain", "create",
+            "make", "give", "list", "does", "will", "would", "should", "could", "have", "from", "on"
+        )
+
+        var swScore = 0.0f
+        var enScore = 0.0f
+
+        val swPrefixes = listOf("ni", "wa", "tu", "ku", "ali", "ana", "ata", "wali", "wana", "wata")
+        for (w in words) {
+            if (swWords.contains(w)) swScore += 1.5f
+            if (enWords.contains(w)) enScore += 1.5f
+            if (w.length >= 4 && swPrefixes.any { w.startsWith(it) }) {
+                swScore += 0.4f
+            }
+        }
+
+        return if (swScore > enScore && swScore >= 1.0f) "sw" else "en"
+    }
+
+    /**
+     * Streams tokens from on-device model using Gemma turn-based template formatting,
+     * strict deterministic language directives, and optimized mobile inference.
      * <start_of_turn>user\n[system instructions + context + user prompt]<end_of_turn>\n<start_of_turn>model\n
      */
     fun generateStreamingResponse(userPrompt: String): Flow<String> = kotlinx.coroutines.flow.callbackFlow {
         val clean = userPrompt.trim()
+        val detectedLang = detectLanguage(clean)
 
         // Retrieve local domain context whenever available from Sovereign Knowledge Store
         val retrievedContext = if (knowledgeDatabase != null) {
             val chunks = knowledgeDatabase!!.searchKnowledge(clean, maxResults = 2)
             if (chunks.isNotEmpty()) {
-                "\n[MUKTADHA WA NDANI / VERIFIED LOCAL CONTEXT]\n" + chunks.joinToString("\n") + "\n"
+                "\n[VERIFIED LOCAL CONTEXT]\n" + chunks.joinToString("\n") + "\n"
             } else ""
         } else ""
 
-        val systemLanguageInstruction = """
-            You are Sauti Assistant, a helpful sovereign on-device AI assistant.
-            Reply in English by default.
-            If the user writes in Swahili (Kiswahili), reply in Swahili.
-            If the user writes in English, reply in English.
-            If the user writes a mix, reply in English unless Swahili is dominant.
-            Never refer to yourself as AI. Use "Assistant" (English) or "Msaidizi" (Swahili).
-            Be direct, accurate, and concise.
-        """.trimIndent()
+        // Concise, token-efficient system instruction with turn-specific deterministic language constraint
+        val turnDirective = if (detectedLang == "sw") {
+            "Wewe ni Sauti Msaidizi. Swali hili limeulizwa kwa Kiswahili. Jibu kwa ufasaha na ukamilifu kwa lugha ya Kiswahili pekee. Usitumie Kiingereza."
+        } else {
+            "You are Sauti Assistant. This query is asked in English. Answer accurately, completely, and strictly in English. Do not reply in Swahili."
+        }
 
         // Gemma turn template: system prompt is placed directly within the first user turn
         val formattedPrompt = buildString {
             append("<start_of_turn>user\n")
-            append(systemLanguageInstruction)
+            append(turnDirective)
             if (retrievedContext.isNotBlank()) {
-                append("\nBase your answer strictly on the provided verified context:\n")
-                append(retrievedContext)
+                append("\nBase your answer on this context if relevant:\n").append(retrievedContext)
             }
             if (customUserInstructions.isNotBlank()) {
                 append("\nUser Preferences: ").append(customUserInstructions)
             }
-            append("\n\nUser Question:\n")
+            append("\n\nQuestion:\n")
             append(clean)
             append("<end_of_turn>\n")
             append("<start_of_turn>model\n")
@@ -409,9 +446,17 @@ object SautiEngineLoader {
             val coreFile = sautiCorePath?.let { File(it) }
             val hasCoreModel = coreFile != null && coreFile.exists() && coreFile.length() > 1024 * 1024
             if (!hasCoreModel) {
-                trySend("The AI model is being downloaded. Please wait for the download to complete, then try again.")
+                if (detectedLang == "sw") {
+                    trySend("Modeli ya akili bado inapakuliwa. Tafadhali subiri upakuaji ukamilike kisha ujaribu tena.")
+                } else {
+                    trySend("The AI model is being downloaded. Please wait for the download to complete, then try again.")
+                }
             } else {
-                trySend("Loading model into memory, please wait a moment...")
+                if (detectedLang == "sw") {
+                    trySend("Inapakia modeli kwenye kumbukumbu ya kifaa, tafadhali subiri kidogo...")
+                } else {
+                    trySend("Loading model into memory, please wait a moment...")
+                }
             }
         }
 
