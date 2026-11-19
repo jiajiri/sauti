@@ -6,9 +6,11 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -151,6 +153,7 @@ fun SautiMainApp(
     var sessionToRename by remember { mutableStateOf<ChatSession?>(null) }
     var renameText by remember { mutableStateOf("") }
     var sessionToDelete by remember { mutableStateOf<ChatSession?>(null) }
+    var selectedSessionForSheet by remember { mutableStateOf<ChatSession?>(null) }
 
     // Native Android Back gesture & button handling:
     androidx.activity.compose.BackHandler(enabled = drawerState.isOpen) {
@@ -309,22 +312,28 @@ fun SautiMainApp(
                             items(items = chatSessions, key = { it.id }) { session ->
                                 val isCurrent = session.id == activeSessionId &&
                                         currentWorkspace == SautiWorkspace.CHAT_WORKSPACE
-                                var showSessionMenu by remember { mutableStateOf(false) }
 
+                                @OptIn(ExperimentalFoundationApi::class)
                                 Surface(
-                                    onClick = {
-                                        viewModel.selectSession(session.id)
-                                        coroutineScope.launch { drawerState.close() }
-                                    },
                                     shape = RoundedCornerShape(12.dp),
                                     color = if (isCurrent) colors.surfaceVariant else Color.Transparent,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(42.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .combinedClickable(
+                                            onClick = {
+                                                viewModel.selectSession(session.id)
+                                                coroutineScope.launch { drawerState.close() }
+                                            },
+                                            onLongClick = {
+                                                selectedSessionForSheet = session
+                                            }
+                                        )
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(start = 14.dp, end = 6.dp)
+                                        modifier = Modifier.padding(horizontal = 14.dp)
                                     ) {
                                         Text(
                                             text = session.title,
@@ -335,57 +344,6 @@ fun SautiMainApp(
                                             overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.weight(1f)
                                         )
-
-                                        Box {
-                                            IconButton(
-                                                onClick = { showSessionMenu = true },
-                                                modifier = Modifier.size(28.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.MoreVert,
-                                                    contentDescription = "Session options",
-                                                    tint = if (isCurrent) colors.onSurface else colors.onSurfaceVariant,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                            }
-
-                                            DropdownMenu(
-                                                expanded = showSessionMenu,
-                                                onDismissRequest = { showSessionMenu = false }
-                                            ) {
-                                                DropdownMenuItem(
-                                                    text = { Text("Rename", color = colors.onSurface, fontSize = 14.sp) },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            imageVector = Icons.Outlined.Edit,
-                                                            contentDescription = null,
-                                                            tint = colors.primary,
-                                                            modifier = Modifier.size(18.dp)
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        showSessionMenu = false
-                                                        renameText = session.title
-                                                        sessionToRename = session
-                                                    }
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text("Delete", color = Color(0xFFEF4444), fontSize = 14.sp) },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            imageVector = Icons.Outlined.DeleteOutline,
-                                                            contentDescription = null,
-                                                            tint = Color(0xFFEF4444),
-                                                            modifier = Modifier.size(18.dp)
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        showSessionMenu = false
-                                                        sessionToDelete = session
-                                                    }
-                                                )
-                                            }
-                                        }
                                     }
                                 }
                             }
@@ -548,78 +506,228 @@ fun SautiMainApp(
         )
     }
 
-    // Rename Session Dialog
+    // Long-Press Context Bottom Sheet for Chat Session Actions (Gemini/ChatGPT UX)
+    @OptIn(ExperimentalMaterial3Api::class)
+    selectedSessionForSheet?.let { session ->
+        ModalBottomSheet(
+            onDismissRequest = { selectedSessionForSheet = null },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = colors.surface,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = colors.onSurfaceVariant.copy(alpha = 0.4f)) }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .navigationBarsPadding(),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Pin / Unpin Conversation Action
+                Surface(
+                    onClick = {
+                        selectedSessionForSheet = null
+                        // Pin toggled
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.Transparent,
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.PushPin,
+                            contentDescription = null,
+                            tint = colors.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "Pin",
+                            color = colors.onSurface,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                // Rename Action
+                Surface(
+                    onClick = {
+                        val target = session
+                        selectedSessionForSheet = null
+                        renameText = target.title
+                        sessionToRename = target
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.Transparent,
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Edit,
+                            contentDescription = null,
+                            tint = colors.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "Rename",
+                            color = colors.onSurface,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                // Delete Action
+                Surface(
+                    onClick = {
+                        val target = session
+                        selectedSessionForSheet = null
+                        sessionToDelete = target
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.Transparent,
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.DeleteOutline,
+                            contentDescription = null,
+                            tint = Color(0xFFEF4444),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "Delete",
+                            color = Color(0xFFEF4444),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+        }
+    }
+
+    // Rename Session Dialog - Gemini style floating rounded dialog
     sessionToRename?.let { session ->
         AlertDialog(
             onDismissRequest = { sessionToRename = null },
             containerColor = colors.surface,
+            shape = RoundedCornerShape(24.dp),
             title = {
-                Text("Rename Conversation", color = colors.onSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            },
-            text = {
-                OutlinedTextField(
-                    value = renameText,
-                    onValueChange = { renameText = it },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = colors.onSurface,
-                        unfocusedTextColor = colors.onSurface,
-                        focusedBorderColor = colors.primary,
-                        unfocusedBorderColor = colors.outline
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                Text(
+                    text = "Rename this chat?",
+                    color = colors.onSurface,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Normal
                 )
             },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    BasicTextField(
+                        value = renameText,
+                        onValueChange = { renameText = it },
+                        singleLine = true,
+                        textStyle = TextStyle(
+                            color = colors.onSurface,
+                            fontSize = 16.sp
+                        ),
+                        cursorBrush = SolidColor(colors.primary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    HorizontalDivider(color = colors.outline, thickness = 1.dp)
+                }
+            },
             confirmButton = {
-                Button(
+                TextButton(
                     onClick = {
                         if (renameText.isNotBlank()) {
                             viewModel.updateSessionTitle(session.id, renameText.trim())
                         }
                         sessionToRename = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.primary)
+                    }
                 ) {
-                    Text("Rename", color = Color.White)
+                    Text(
+                        text = "Rename",
+                        color = colors.primary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { sessionToRename = null }) {
-                    Text("Cancel", color = colors.onSurfaceVariant)
+                    Text(
+                        text = "Cancel",
+                        color = colors.onSurfaceVariant,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         )
     }
 
-    // Delete Session Confirmation Dialog
+    // Delete Session Confirmation Dialog - Gemini style floating rounded dialog
     sessionToDelete?.let { session ->
         AlertDialog(
             onDismissRequest = { sessionToDelete = null },
             containerColor = colors.surface,
+            shape = RoundedCornerShape(24.dp),
             title = {
-                Text("Delete Conversation?", color = colors.onSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Delete chat?",
+                    color = colors.onSurface,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Normal
+                )
             },
             text = {
                 Text(
-                    "Are you sure you want to delete \"${session.title}\"? This action cannot be undone.",
+                    text = "You'll no longer see this chat here. This will also delete related activity and stored history from your Sauti activity.",
                     color = colors.onSurfaceVariant,
-                    fontSize = 14.sp
+                    fontSize = 14.5.sp,
+                    lineHeight = 20.sp
                 )
             },
             confirmButton = {
-                Button(
+                TextButton(
                     onClick = {
                         viewModel.deleteSession(session.id)
                         sessionToDelete = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
+                    }
                 ) {
-                    Text("Delete", color = Color.White)
+                    Text(
+                        text = "Confirm",
+                        color = colors.primary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { sessionToDelete = null }) {
-                    Text("Cancel", color = colors.onSurfaceVariant)
+                    Text(
+                        text = "Cancel",
+                        color = colors.onSurfaceVariant,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         )

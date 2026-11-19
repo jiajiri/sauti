@@ -124,7 +124,7 @@ class SautiNavigationViewModel(
     }
 
     fun updateUserName(name: String) {
-        val clean = name.trim().ifEmpty { "Local User" }
+        val clean = name.trim().ifEmpty { "Device Owner" }
         prefs.userName = clean
         _userProfile.value = _userProfile.value.copy(fullName = clean)
     }
