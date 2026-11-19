@@ -6,6 +6,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.graphics.BitmapFactory
+import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationCompat
 import com.sauti.app.MainActivity
 import com.sauti.app.R
@@ -119,7 +121,13 @@ object SautiNotificationManager {
             }
         }
 
-        return NotificationCompat.Builder(context, CHANNEL_DOWNLOAD_ID)
+        val appIconBitmap = try {
+            BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)
+        } catch (_: Exception) {
+            null
+        }
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_DOWNLOAD_ID)
             .setSmallIcon(R.drawable.ic_sauti_notification)
             .setContentTitle(title)
             .setContentText(content)
@@ -128,7 +136,13 @@ object SautiNotificationManager {
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
+            .setColor(ContextCompat.getColor(context, android.R.color.black))
+
+        if (appIconBitmap != null) {
+            builder.setLargeIcon(appIconBitmap)
+        }
+
+        return builder.build()
     }
 
     /**
@@ -157,7 +171,13 @@ object SautiNotificationManager {
             .trim()
             .take(120)
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_COMPLETION_ID)
+        val appIconBitmap = try {
+            BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)
+        } catch (_: Exception) {
+            null
+        }
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_COMPLETION_ID)
             .setSmallIcon(R.drawable.ic_sauti_notification)
             .setContentTitle(title)
             .setContentText(cleanPreview)
@@ -165,7 +185,13 @@ object SautiNotificationManager {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
+            .setColor(ContextCompat.getColor(context, android.R.color.black))
+
+        if (appIconBitmap != null) {
+            builder.setLargeIcon(appIconBitmap)
+        }
+
+        val notification = builder.build()
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(COMPLETION_NOTIFICATION_ID, notification)
