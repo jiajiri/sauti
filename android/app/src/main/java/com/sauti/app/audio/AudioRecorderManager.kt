@@ -41,6 +41,7 @@ class AudioRecorderManager(private val context: Context) {
         scope: CoroutineScope,
         onAmplitudeChanged: (Float) -> Unit,
         onSpeechDetected: (Boolean) -> Unit = {},
+        onAudioData: ((ShortArray, Int) -> Unit)? = null,
         onError: (String) -> Unit = {}
     ) {
         if (isRecording.get()) return
@@ -85,6 +86,8 @@ class AudioRecorderManager(private val context: Context) {
                     if (read > 0) {
                         val amplitude = AudioVisualizerProcessor.computeNormalizedRms(buffer, read)
                         val isSpeech = vadController.processFrame(amplitude)
+
+                        onAudioData?.invoke(buffer, read)
 
                         withContext(Dispatchers.Main) {
                             onAmplitudeChanged(amplitude)

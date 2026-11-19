@@ -54,6 +54,24 @@ object SautiEngineLoader {
     )
     private external fun nativeSwitchCoreModel(path: String): Boolean
     private external fun nativeSetVoiceLanguage(lang: String)
+    private external fun nativePushAudioSamples(samples: ShortArray, length: Int): Int
+    private external fun nativeTranscribeStreaming(): String
+
+    fun pushAudioSamples(samples: ShortArray, length: Int): Int {
+        return try {
+            nativePushAudioSamples(samples, length)
+        } catch (e: Throwable) {
+            0
+        }
+    }
+
+    fun transcribeStreaming(): String {
+        return try {
+            nativeTranscribeStreaming()
+        } catch (e: Throwable) {
+            ""
+        }
+    }
 
     /**
      * Toggles between Tanzanian Swahili ("sw") and English ("en") voice transcription.

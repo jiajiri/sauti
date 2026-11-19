@@ -194,6 +194,15 @@ Java_com_sauti_app_SautiInputMethodService_nativePushAudioSamples(
     return static_cast<jint>(written);
 }
 
+extern "C" JNIEXPORT jint JNICALL
+Java_com_sauti_app_sauti_SautiEngineLoader_nativePushAudioSamples(
+    JNIEnv* env,
+    jobject /* this */,
+    jshortArray samples,
+    jint length) {
+    return Java_com_sauti_app_SautiInputMethodService_nativePushAudioSamples(env, nullptr, samples, length);
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_sauti_app_SautiInputMethodService_nativeTranscribeStreaming(
     JNIEnv* env,
@@ -266,6 +275,13 @@ Java_com_sauti_app_SautiInputMethodService_nativeTranscribeStreaming(
 
     LOGI("Whisper transcribed text: %s", result_text.c_str());
     return env->NewStringUTF(result_text.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_sauti_app_sauti_SautiEngineLoader_nativeTranscribeStreaming(
+    JNIEnv* env,
+    jobject /* this */) {
+    return Java_com_sauti_app_SautiInputMethodService_nativeTranscribeStreaming(env, nullptr);
 }
 
 extern "C" JNIEXPORT void JNICALL

@@ -20,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.animation.core.RepeatMode
@@ -103,6 +105,42 @@ fun ChatScreen(
     var streamingMessage by remember { mutableStateOf<ConversationalMessage?>(null) }
     var inputTextFieldValue by remember { mutableStateOf(TextFieldValue("")) }
     var isGenerating by remember { mutableStateOf(false) }
+
+    // In-chat real-time voice recording & waveform state
+    var isVoiceRecording by remember { mutableStateOf(false) }
+    var liveVoiceAmplitude by remember { mutableFloatStateOf(0.15f) }
+    var liveTranscribedText by remember { mutableStateOf("") }
+    val audioRecorderManager = remember { com.sauti.app.audio.AudioRecorderManager(context) }
+
+    // Start/stop background recorder and streaming transcription when voice mode activates
+    LaunchedEffect(isVoiceRecording) {
+        if (isVoiceRecording) {
+            liveTranscribedText = ""
+            if (audioRecorderManager.hasRecordPermission()) {
+                audioRecorderManager.startListening(
+                    scope = coroutineScope,
+                    onAmplitudeChanged = { amp ->
+                        liveVoiceAmplitude = amp.coerceIn(0.1f, 1.0f)
+                    },
+                    onAudioData = { pcmBuffer, length ->
+                        com.sauti.app.sauti.SautiEngineLoader.pushAudioSamples(pcmBuffer, length)
+                    }
+                )
+            }
+            while (isVoiceRecording) {
+                kotlinx.coroutines.delay(250)
+                try {
+                    val transcript = com.sauti.app.sauti.SautiEngineLoader.transcribeStreaming()
+                    if (transcript.isNotBlank()) {
+                        liveTranscribedText = transcript.trim()
+                    }
+                } catch (_: Exception) {}
+            }
+        } else {
+            audioRecorderManager.stopListening()
+            liveVoiceAmplitude = 0.15f
+        }
+    }
 
     // Gate voice input on Whisper model readiness
     val isVoiceReady by produceState(initialValue = false) {
@@ -316,94 +354,197 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Pill Container
-                Surface(
-                    shape = RoundedCornerShape(28.dp),
-                    color = colors.surfaceVariant,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(54.dp)
-                ) {
-                    Row(
+                if (isVoiceRecording) {
+                    // ── In-Chat Live Voice Waveform Pill (Gemini / Claude Style) ─────
+                    Surface(
+                        shape = RoundedCornerShape(28.dp),
+                        color = colors.surfaceVariant,
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            .fillMaxWidth()
+                            .height(58.dp)
                     ) {
-                        // Leading '+' attachment button
-                        Icon(
-                            imageVector = Icons.Outlined.Add,
-                            contentDescription = "Attach",
-                            tint = colors.onSurfaceVariant,
+                        Row(
                             modifier = Modifier
-                                .size(24.dp)
-                                .clickable { /* Attachment trigger */ }
-                        )
+                                .fillMaxSize()
+                                .padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            // Leading '+' button
+                            Icon(
+                                imageVector = Icons.Outlined.Add,
+                                contentDescription = "Add",
+                                tint = colors.onSurfaceVariant,
+                                modifier = Modifier.size(24.dp)
+                            )
 
-                        // Center Input Field
-                        BasicTextField(
-                            value = inputTextFieldValue,
-                            onValueChange = { inputTextFieldValue = it },
-                            modifier = Modifier
-                                .weight(1f)
-                                .focusRequester(focusRequester),
-                            textStyle = TextStyle(
-                                color = colors.onSurface,
-                                fontSize = 15.sp,
-                                fontFamily = FontFamily.Default
-                            ),
-                            cursorBrush = SolidColor(colors.primary),
-                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                                imeAction = androidx.compose.ui.text.input.ImeAction.Send
-                            ),
-                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                                onSend = { submitPrompt(inputTextFieldValue.text) }
-                            ),
-                            decorationBox = { innerTextField ->
-                                if (inputTextFieldValue.text.isEmpty()) {
-                                    Text(
-                                        text = "Ask Sauti...",
-                                        color = colors.onSurfaceVariant,
-                                        fontSize = 15.sp
+                            // Dynamic Live Waveform Bars
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val tickMultipliers = listOf(
+                                    0.25f, 0.40f, 0.65f, 0.85f, 1.0f,
+                                    0.90f, 0.70f, 0.50f, 0.80f, 1.0f,
+                                    0.85f, 0.60f, 0.40f, 0.25f
+                                )
+                                tickMultipliers.forEach { multiplier ->
+                                    val barHeight = (8.dp + 26.dp * (liveVoiceAmplitude * multiplier)).coerceIn(6.dp, 32.dp)
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(horizontal = 2.dp)
+                                            .width(3.dp)
+                                            .height(barHeight)
+                                            .clip(RoundedCornerShape(2.dp))
+                                            .background(colors.onSurface)
                                     )
                                 }
-                                innerTextField()
                             }
-                        )
 
-                        // Dictation Microphone Icon (disabled if Whisper model not yet ready)
-                        Icon(
-                            imageVector = Icons.Outlined.Mic,
-                            contentDescription = if (isVoiceReady) "Speak" else "Voice downloading...",
-                            tint = if (isVoiceReady) colors.onSurfaceVariant else colors.onSurfaceVariant.copy(alpha = 0.38f),
+                            // Circular Stop Button (▢)
+                            IconButton(
+                                onClick = {
+                                    isVoiceRecording = false
+                                    if (liveTranscribedText.isNotBlank()) {
+                                        inputTextFieldValue = TextFieldValue(
+                                            text = liveTranscribedText,
+                                            selection = TextRange(liveTranscribedText.length)
+                                        )
+                                    }
+                                },
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(colors.surface)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Stop,
+                                    contentDescription = "Stop recording",
+                                    tint = colors.onSurface,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            // Circular Send Upward Arrow Button (↑)
+                            IconButton(
+                                onClick = {
+                                    isVoiceRecording = false
+                                    val textToSend = liveTranscribedText.ifBlank { inputTextFieldValue.text.trim() }
+                                    if (textToSend.isNotBlank()) {
+                                        submitPrompt(textToSend)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .clip(CircleShape)
+                                    .background(colors.primary)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.ArrowUpward,
+                                    contentDescription = "Send voice message",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    // ── Standard Text Input Pill ─────────────────────────────────────
+                    Surface(
+                        shape = RoundedCornerShape(28.dp),
+                        color = colors.surfaceVariant,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(54.dp)
+                    ) {
+                        Row(
                             modifier = Modifier
-                                .size(22.dp)
-                                .clickable(enabled = isVoiceReady) { onVoiceClick() }
+                                .fillMaxSize()
+                                .padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            // Leading '+' attachment button
+                            Icon(
+                                imageVector = Icons.Outlined.Add,
+                                contentDescription = "Attach",
+                                tint = colors.onSurfaceVariant,
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clickable { /* Attachment trigger */ }
+                            )
+
+                            // Center Input Field
+                            BasicTextField(
+                                value = inputTextFieldValue,
+                                onValueChange = { inputTextFieldValue = it },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(focusRequester),
+                                textStyle = TextStyle(
+                                    color = colors.onSurface,
+                                    fontSize = 15.sp,
+                                    fontFamily = FontFamily.Default
+                                ),
+                                cursorBrush = SolidColor(colors.primary),
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    imeAction = androidx.compose.ui.text.input.ImeAction.Send
+                                ),
+                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                    onSend = { submitPrompt(inputTextFieldValue.text) }
+                                ),
+                                decorationBox = { innerTextField ->
+                                    if (inputTextFieldValue.text.isEmpty()) {
+                                        Text(
+                                            text = "Ask Sauti...",
+                                            color = colors.onSurfaceVariant,
+                                            fontSize = 15.sp
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            )
+
+                            // Dictation Microphone Icon
+                            Icon(
+                                imageVector = Icons.Outlined.Mic,
+                                contentDescription = if (isVoiceReady) "Speak" else "Voice downloading...",
+                                tint = if (isVoiceReady) colors.onSurfaceVariant else colors.onSurfaceVariant.copy(alpha = 0.38f),
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .clickable(enabled = isVoiceReady) {
+                                        isVoiceRecording = true
+                                    }
+                            )
+                        }
+                    }
+
+                    // Far-Right Circular Blue Send Arrow Button
+                    IconButton(
+                        onClick = {
+                            if (inputTextFieldValue.text.isNotBlank()) {
+                                submitPrompt(inputTextFieldValue.text)
+                            } else if (isVoiceReady) {
+                                isVoiceRecording = true
+                            }
+                        },
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(CircleShape)
+                            .background(colors.primary)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
+                            contentDescription = "Send message",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
-                }
-
-                // Far-Right Circular Blue Send Arrow Button
-                IconButton(
-                    onClick = {
-                        if (inputTextFieldValue.text.isNotBlank()) {
-                            submitPrompt(inputTextFieldValue.text)
-                        } else if (isVoiceReady) {
-                            onVoiceClick()
-                        }
-                    },
-                    modifier = Modifier
-                        .size(54.dp)
-                        .clip(CircleShape)
-                        .background(colors.primary)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
-                        contentDescription = "Send message",
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
                 }
             }
         }

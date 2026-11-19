@@ -452,19 +452,11 @@ fun SautiMainApp(
             color = colors.background
         ) {
             when (currentWorkspace) {
-                SautiWorkspace.CHAT_WORKSPACE -> {
+                SautiWorkspace.CHAT_WORKSPACE, SautiWorkspace.AUDIO_WORKSPACE -> {
                     ChatScreen(
-                        onVoiceClick = { viewModel.selectWorkspace(SautiWorkspace.AUDIO_WORKSPACE) },
+                        onVoiceClick = {},
                         onDrawerClick = { coroutineScope.launch { drawerState.open() } },
                         viewModel = viewModel
-                    )
-                }
-                SautiWorkspace.AUDIO_WORKSPACE -> {
-                    VoiceModeScreen(
-                        liveTranscript = "Inasikiliza sauti...",
-                        isSpeaking = false,
-                        onCloseClick = { viewModel.selectWorkspace(SautiWorkspace.CHAT_WORKSPACE) },
-                        onToggleVoice = {}
                     )
                 }
                 SautiWorkspace.LIBRARY_WORKSPACE -> {
