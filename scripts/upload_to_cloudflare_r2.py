@@ -151,37 +151,37 @@ def main():
     # Dynamically build model definitions from environment variables (Zero hardcoded model strings)
     model_mappings = [
         {
-            "id": os.getenv("MODEL_VOICE_SW_ID", "voice_sw"),
-            "name": os.getenv("MODEL_VOICE_SW_NAME", "your_model_voice_sw_name_here"),
-            "source": os.getenv("MODEL_VOICE_SW_SOURCE", os.path.join(MODELS_DIR, "whisper-swahili-small-q4_1.bin")),
-            "target": os.getenv("MODEL_VOICE_SW_TARGET", "whisper-swahili-small-q4_1.bin.enc"),
-            "output_filename": os.getenv("MODEL_VOICE_SW_FILENAME", "voice_lite.bin"),
-            "required": os.getenv("MODEL_VOICE_SW_REQUIRED", "true").lower() == "true",
-            "version": args.version
-        },
-        {
             "id": os.getenv("MODEL_VOICE_EN_ID", "voice_en"),
-            "name": os.getenv("MODEL_VOICE_EN_NAME", "your_model_voice_en_name_here"),
+            "name": os.getenv("MODEL_VOICE_EN_NAME", "whisper_base_en"),
             "source": os.getenv("MODEL_VOICE_EN_SOURCE", os.path.join(MODELS_DIR, "ggml-base.en-q5_1.bin")),
             "target": os.getenv("MODEL_VOICE_EN_TARGET", "ggml-base.en-q5_1.bin.enc"),
             "output_filename": os.getenv("MODEL_VOICE_EN_FILENAME", "voice_en.bin"),
-            "required": os.getenv("MODEL_VOICE_EN_REQUIRED", "false").lower() == "true",
+            "required": os.getenv("MODEL_VOICE_EN_REQUIRED", "true").lower() == "true",
             "version": args.version
         },
         {
             "id": os.getenv("MODEL_CORE_PRO_ID", "core_pro"),
-            "name": os.getenv("MODEL_CORE_PRO_NAME", "your_model_core_pro_name_here"),
-            "source": os.getenv("MODEL_CORE_PRO_SOURCE", os.path.join(MODELS_DIR, "swahili-gemma-1b-q4_k_m.gguf")),
-            "target": os.getenv("MODEL_CORE_PRO_TARGET", "swahili-gemma-1b-q4_k_m.gguf.enc"),
+            "name": os.getenv("MODEL_CORE_PRO_NAME", "gemma_3_1b_instruct"),
+            "source": os.getenv("MODEL_CORE_PRO_SOURCE", os.path.join(MODELS_DIR, "gemma-3-1b-it-q4_k_m.gguf")),
+            "target": os.getenv("MODEL_CORE_PRO_TARGET", "gemma-3-1b-it-q4_k_m.gguf.enc"),
             "output_filename": os.getenv("MODEL_CORE_PRO_FILENAME", "core_pro.bin"),
             "required": os.getenv("MODEL_CORE_PRO_REQUIRED", "true").lower() == "true",
             "version": args.version
         },
         {
+            "id": os.getenv("MODEL_VOICE_SW_ID", "voice_sw"),
+            "name": os.getenv("MODEL_VOICE_SW_NAME", "whisper_swahili_small"),
+            "source": os.getenv("MODEL_VOICE_SW_SOURCE", os.path.join(MODELS_DIR, "whisper-swahili-small-q4_1.bin")),
+            "target": os.getenv("MODEL_VOICE_SW_TARGET", "whisper-swahili-small-q4_1.bin.enc"),
+            "output_filename": os.getenv("MODEL_VOICE_SW_FILENAME", "voice_lite.bin"),
+            "required": os.getenv("MODEL_VOICE_SW_REQUIRED", "false").lower() == "true",
+            "version": args.version
+        },
+        {
             "id": os.getenv("MODEL_CORE_ULTRA_ID", "core_ultra"),
-            "name": os.getenv("MODEL_CORE_ULTRA_NAME", "your_model_core_ultra_name_here"),
-            "source": os.getenv("MODEL_CORE_ULTRA_SOURCE", os.path.join(MODELS_DIR, "swahili-gemma-4b-q4_k_m.gguf")),
-            "target": os.getenv("MODEL_CORE_ULTRA_TARGET", "swahili-gemma-4b-q4_k_m.gguf.enc"),
+            "name": os.getenv("MODEL_CORE_ULTRA_NAME", "gemma_3_4b_instruct"),
+            "source": os.getenv("MODEL_CORE_ULTRA_SOURCE", os.path.join(MODELS_DIR, "gemma-3-4b-it-q4_k_m.gguf")),
+            "target": os.getenv("MODEL_CORE_ULTRA_TARGET", "gemma-3-4b-it-q4_k_m.gguf.enc"),
             "output_filename": os.getenv("MODEL_CORE_ULTRA_FILENAME", "core_ultra.bin"),
             "required": os.getenv("MODEL_CORE_ULTRA_REQUIRED", "false").lower() == "true",
             "version": args.version

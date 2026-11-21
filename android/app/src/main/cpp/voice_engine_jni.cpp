@@ -37,8 +37,8 @@ static struct {
     int   max_tokens     = 512;
 } g_inf_params;
 
-// Active ASR language: "sw" (default Tanzanian Swahili) or "en" (English)
-static std::string g_active_asr_language = "sw";
+// Active ASR language: "en" (default English) or "sw" (Swahili)
+static std::string g_active_asr_language = "en";
 
 // Global lock-free ring buffer for 16kHz audio samples
 static sauti::dsa::SpscRingBuffer<int16_t, 65536> g_audio_ring_buffer;
@@ -485,4 +485,42 @@ Java_com_sauti_app_sauti_SautiEngineLoader_nativeSwitchCoreModel(
     ensureLlamaModelLoaded();
     g_sauti_core_initialized = (g_llama_model != nullptr && g_llama_context != nullptr);
     return g_sauti_core_initialized ? JNI_TRUE : JNI_FALSE;
+}
+
+// ─── LoRA Adapter Dynamic Loading Hook (for Phase 2 Swahili adapter) ─────────
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_sauti_app_sauti_SautiEngineLoader_nativeApplyLoraAdapter(
+    JNIEnv* env, jobject /* this */, jstring jLoraPath, jfloat scale
+) {
+    if (!jLoraPath) return JNI_FALSE;
+    const char* cLoraPath = env->GetStringUTFChars(jLoraPath, nullptr);
+    if (!cLoraPath) return JNI_FALSE;
+
+    std::lock_guard<std::mutex> lock(g_engine_mutex);
+    if (!g_llama_model || !g_llama_context) {
+        LOGW("Cannot apply LoRA adapter: Llama model or context not initialized.");
+        env->ReleaseStringUTFChars(jLoraPath, cLoraPath);
+        return JNI_FALSE;
+    }
+
+    LOGI("Applying LoRA adapter from: %s with scale: %.2f", cLoraPath, scale);
+    struct llama_adapter_lora* adapter = llama_adapter_lora_init(g_llama_model, cLoraPath);
+    if (!adapter) {
+        LOGE("Failed to load LoRA adapter from %s", cLoraPath);
+        env->ReleaseStringUTFChars(jLoraPath, cLoraPath);
+        return JNI_FALSE;
+    }
+
+    struct llama_adapter_lora* adapters[1] = { adapter };
+    float scales[1] = { scale };
+    int32_t ret = llama_set_adapters_lora(g_llama_context, adapters, 1, scales);
+    env->ReleaseStringUTFChars(jLoraPath, cLoraPath);
+    if (ret != 0) {
+        LOGE("Failed to set LoRA adapter to context (ret=%d)", ret);
+        return JNI_FALSE;
+    }
+
+    LOGI("LoRA adapter applied successfully.");
+    return JNI_TRUE;
 }

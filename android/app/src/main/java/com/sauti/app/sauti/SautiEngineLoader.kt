@@ -56,6 +56,21 @@ object SautiEngineLoader {
     private external fun nativeSetVoiceLanguage(lang: String)
     private external fun nativePushAudioSamples(samples: ShortArray, length: Int): Int
     private external fun nativeTranscribeStreaming(): String
+    private external fun nativeApplyLoraAdapter(loraPath: String, scale: Float): Boolean
+
+    /**
+     * Dynamically attaches a LoRA adapter (e.g. Swahili PEFT adapter) to the frozen base model.
+     */
+    fun applyLoraAdapter(loraPath: String, scale: Float = 1.0f): Boolean {
+        return try {
+            val success = nativeApplyLoraAdapter(loraPath, scale)
+            Log.i(TAG, "applyLoraAdapter result=$success for path=$loraPath scale=$scale")
+            success
+        } catch (e: Throwable) {
+            Log.w(TAG, "applyLoraAdapter failed: ${e.message}")
+            false
+        }
+    }
 
     fun pushAudioSamples(samples: ShortArray, length: Int): Int {
         return try {

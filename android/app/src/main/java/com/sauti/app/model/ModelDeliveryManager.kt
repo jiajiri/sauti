@@ -44,13 +44,14 @@ object ModelDeliveryManager {
         val sha256Checksum: String? = null
     )
 
+    // Primary English-first foundation models
+    val MODEL_VOICE_EN = ModelSpec(com.sauti.app.SautiConfig.MODEL_VOICE_EN_FILENAME, 59_721_011L)
+    val MODEL_CORE_PRO = ModelSpec(com.sauti.app.SautiConfig.MODEL_CORE_PRO_FILENAME, 760_000_000L) // Google Gemma 3 1B Instruct base
     val MODEL_VOICE_SW = ModelSpec(com.sauti.app.SautiConfig.MODEL_VOICE_SW_FILENAME, 160_438_272L)
-    val MODEL_VOICE_EN = ModelSpec(com.sauti.app.SautiConfig.MODEL_VOICE_EN_FILENAME, 59_895_808L)
-    val MODEL_CORE_PRO = ModelSpec(com.sauti.app.SautiConfig.MODEL_CORE_PRO_FILENAME, 806_000_000L)
-    val MODEL_CORE_ULTRA = ModelSpec("core_ultra.bin", 2_600_000_000L) // your_model_core_ultra_name_here
+    val MODEL_CORE_ULTRA = ModelSpec("core_ultra.bin", 2_600_000_000L)
 
-    // Backward compatibility
-    val MODEL_VOICE_LITE = MODEL_VOICE_SW
+    // Backward compatibility aliases
+    val MODEL_VOICE_LITE = MODEL_VOICE_EN
     val MODEL_CORE_LITE = MODEL_CORE_PRO
 
     fun getModelFile(context: Context, fileName: String): File {

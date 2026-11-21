@@ -15,8 +15,8 @@ package com.sauti.app
  */
 object SautiConfig {
     const val MODEL_MANIFEST_URL: String = "https://pub-f1321613293f452d8ebb4aed6e33ab1f.r2.dev/models/latest/manifest.json"
-    const val MODEL_VOICE_SW_FILENAME: String = "voice_lite.bin"
     const val MODEL_VOICE_EN_FILENAME: String = "voice_en.bin"
+    const val MODEL_VOICE_SW_FILENAME: String = "voice_lite.bin"
     const val MODEL_CORE_PRO_FILENAME: String = "core_pro.bin"
     const val MODEL_CORE_ULTRA_FILENAME: String = "core_ultra.bin"
 }
