@@ -82,3 +82,4 @@ class ModelBundleExtractorTest {
         assertTrue("Core file must satisfy isValidGguf", ModelDownloadWorker.isValidGguf(coreFile))
     }
 }
+

@@ -185,7 +185,13 @@ class ModelDownloadWorker(
                         return Result.retry()
                     }
 
-                    Log.i(TAG, "Decrypting and extracting unified model archive...")
+                    Log.i(TAG, "Decrypting and extracting unified model archive with 1MB high-speed I/O...")
+                    setProgress(workDataOf(
+                        "progress" to 95,
+                        "status" to "extracting",
+                        "model_name" to "Extracting model weights..."
+                    ))
+
                     val extracted = bundleEncFile.inputStream().use { stream ->
                         ModelCryptoManager.decryptAndExtractZipStream(
                             encryptedStream = stream,
@@ -196,9 +202,26 @@ class ModelDownloadWorker(
                     }
                     bundleEncFile.delete()
 
+                    setProgress(workDataOf(
+                        "progress" to 100,
+                        "status" to "extracted",
+                        "model_name" to "Model ready"
+                    ))
+
                     if (extracted.isEmpty() || !hasVoiceAndCore(sautiDir)) {
                         Log.e(TAG, "Unified bundle extraction failed or models invalid.")
                         return Result.retry()
+                    }
+
+                    // Auto-trigger native model initialization immediately upon successful extraction
+                    try {
+                        val coreFile = File(sautiDir, "core_pro.bin")
+                        val voiceFile = File(sautiDir, "voice_lite.bin")
+                        if (isValidGguf(coreFile)) {
+                            com.sauti.app.sauti.SautiEngineLoader.ensureAssetsRegistered(context)
+                        }
+                    } catch (e: Throwable) {
+                        Log.w(TAG, "Immediate engine pre-warm on worker finished: ${e.message}")
                     }
 
                     Log.i(TAG, "Unified bundle successfully extracted and verified: ${extracted.keys}")

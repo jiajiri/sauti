@@ -474,21 +474,34 @@ object SautiEngineLoader {
             Log.w(TAG, "Native inference error: " + e.message)
         }
 
-        // If native inference was unavailable or failed to produce tokens, notify user clearly
+        // If native inference was unavailable or failed to produce tokens, provide clear, actionable status
         if (!tokensEmitted) {
             val coreFile = sautiCorePath?.let { File(it) }
-            val hasCoreModel = coreFile != null && coreFile.exists() && coreFile.length() > 1024 * 1024
-            if (!hasCoreModel) {
+            val hasValidCore = coreFile != null && coreFile.exists() && com.sauti.app.sync.ModelDownloadWorker.isValidGguf(coreFile)
+            if (!hasValidCore) {
                 if (detectedLang == "sw") {
-                    trySend("Modeli ya akili bado inapakuliwa chinichini. Tafadhali subiri upakuaji ukamilike kisha ujaribu tena.")
+                    trySend("Modeli ya akili inapakuliwa na kuwekwa tayari chinichini (tazama maendeleo kwenye bango hapo juu). Tafadhali subiri ikamilike kisha uulize tena.")
                 } else {
-                    trySend("The AI model is being downloaded in the background. Please wait for the download to complete, then try again.")
+                    trySend("The AI model is currently downloading and extracting in the background (see live progress bar at the top). Please wait a moment for completion.")
                 }
             } else {
-                if (detectedLang == "sw") {
-                    trySend("Inapakia modeli kwenye kumbukumbu ya kifaa, tafadhali subiri kidogo...")
+                // If model file is valid on disk, attempt immediate lazy-load if context was null
+                val reloaded = try {
+                    nativeInitCoreEngine(coreFile!!.absolutePath)
+                } catch (_: Throwable) { false }
+
+                if (reloaded) {
+                    try {
+                        nativeGenerateChatCompletion(formattedPrompt) { token ->
+                            trySend(token)
+                        }
+                    } catch (_: Throwable) {}
                 } else {
-                    trySend("Loading model into memory, please wait a moment...")
+                    if (detectedLang == "sw") {
+                        trySend("Inapakia modeli kwenye kumbukumbu ya kifaa (mmap), tafadhali subiri sekunde chache...")
+                    } else {
+                        trySend("Warming up model weights in memory, please try again in a few seconds...")
+                    }
                 }
             }
         }
