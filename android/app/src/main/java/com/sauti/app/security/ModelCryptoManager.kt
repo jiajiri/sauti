@@ -81,21 +81,19 @@ object ModelCryptoManager {
      * 4. Full end-to-end cryptographic integrity is verified by comparing the plaintext SHA-256
      *    against the expected SHA-256 defined in the signed manifest.
      */
-    fun decryptStream(
+    fun decryptStreamToOutput(
         encryptedStream: InputStream,
-        targetFile: File,
+        outputStream: java.io.OutputStream,
         key: SecretKey,
         isGzipCompressed: Boolean = false
     ): Boolean {
         return try {
-            // Step 1: Decompress gzip stream on the fly if compressed
             val stream: InputStream = if (isGzipCompressed) {
                 java.util.zip.GZIPInputStream(encryptedStream)
             } else {
                 encryptedStream
             }
 
-            // Step 2: Read 12-byte GCM IV prefix
             val iv = ByteArray(GCM_IV_LENGTH)
             var ivBytesRead = 0
             while (ivBytesRead < GCM_IV_LENGTH) {
@@ -104,7 +102,6 @@ object ModelCryptoManager {
                 ivBytesRead += n
             }
 
-            // Step 3: Construct AES-CTR initial counter block = IV[12 bytes] + 0x00 0x00 0x00 0x02
             val ctrIv = ByteArray(16)
             System.arraycopy(iv, 0, ctrIv, 0, 12)
             ctrIv[12] = 0x00
@@ -115,51 +112,108 @@ object ModelCryptoManager {
             val cipher = Cipher.getInstance("AES/CTR/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, key, IvParameterSpec(ctrIv))
 
-            // Step 4: Stream decrypt in 64 KB chunks maintaining a 16-byte trailing tail buffer for the tag
-            targetFile.parentFile?.mkdirs()
-            val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
-            if (tempFile.exists()) tempFile.delete()
-
             val readBuffer = ByteArray(64 * 1024)
             val tailBuffer = java.io.ByteArrayOutputStream(64 * 1024 + 16)
 
-            FileOutputStream(tempFile).use { fos ->
-                var bytesRead: Int
-                while (stream.read(readBuffer).also { bytesRead = it } != -1) {
-                    tailBuffer.write(readBuffer, 0, bytesRead)
+            var bytesRead: Int
+            while (stream.read(readBuffer).also { bytesRead = it } != -1) {
+                tailBuffer.write(readBuffer, 0, bytesRead)
 
-                    if (tailBuffer.size() > 16) {
-                        val allBytes = tailBuffer.toByteArray()
-                        val toDecryptLen = allBytes.size - 16
-                        val decryptedChunk = cipher.update(allBytes, 0, toDecryptLen)
-                        if (decryptedChunk != null && decryptedChunk.isNotEmpty()) {
-                            fos.write(decryptedChunk)
-                        }
-
-                        tailBuffer.reset()
-                        tailBuffer.write(allBytes, toDecryptLen, 16)
+                if (tailBuffer.size() > 16) {
+                    val allBytes = tailBuffer.toByteArray()
+                    val toDecryptLen = allBytes.size - 16
+                    val decryptedChunk = cipher.update(allBytes, 0, toDecryptLen)
+                    if (decryptedChunk != null && decryptedChunk.isNotEmpty()) {
+                        outputStream.write(decryptedChunk)
                     }
-                }
 
-                // Finalize cipher
-                val finalBytes = cipher.doFinal()
-                if (finalBytes != null && finalBytes.isNotEmpty()) {
-                    fos.write(finalBytes)
+                    tailBuffer.reset()
+                    tailBuffer.write(allBytes, toDecryptLen, 16)
                 }
-                fos.flush()
             }
 
-            // Verify trailing tag was present and target file has valid content
-            if (tailBuffer.size() == 16 && tempFile.exists() && tempFile.length() > 0) {
-                if (targetFile.exists()) targetFile.delete()
-                tempFile.renameTo(targetFile)
-                true
-            } else {
-                tempFile.delete()
-                false
+            val finalBytes = cipher.doFinal()
+            if (finalBytes != null && finalBytes.isNotEmpty()) {
+                outputStream.write(finalBytes)
+            }
+            outputStream.flush()
+            tailBuffer.size() == 16
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Decrypts an encrypted stream and extracts a multi-model ZIP/TAR archive in a single pass.
+     * Extracts files directly into targetDir.
+     */
+    fun decryptAndExtractZipStream(
+        encryptedStream: InputStream,
+        targetDir: File,
+        key: SecretKey,
+        isGzipCompressed: Boolean = false
+    ): Map<String, File> {
+        targetDir.mkdirs()
+        val extractedFiles = mutableMapOf<String, File>()
+
+        // Use a pipe or temp file to stream decrypt then unpack
+        val tempZip = File(targetDir, "bundle_temp_${System.currentTimeMillis()}.zip")
+        try {
+            FileOutputStream(tempZip).use { fos ->
+                val ok = decryptStreamToOutput(encryptedStream, fos, key, isGzipCompressed)
+                if (!ok) return emptyMap()
+            }
+
+            java.util.zip.ZipFile(tempZip).use { zip ->
+                val entries = zip.entries()
+                while (entries.hasMoreElements()) {
+                    val entry = entries.nextElement()
+                    if (entry.isDirectory) continue
+                    val destFile = File(targetDir, entry.name)
+                    destFile.parentFile?.mkdirs()
+                    zip.getInputStream(entry).use { zis ->
+                        FileOutputStream(destFile).use { fos ->
+                            zis.copyTo(fos)
+                        }
+                    }
+                    extractedFiles[entry.name] = destFile
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
+            return emptyMap()
+        } finally {
+            if (tempZip.exists()) tempZip.delete()
+        }
+
+        return extractedFiles
+    }
+    fun decryptStream(
+        encryptedStream: InputStream,
+        targetFile: File,
+        key: SecretKey,
+        isGzipCompressed: Boolean = false
+    ): Boolean {
+        targetFile.parentFile?.mkdirs()
+        val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
+        if (tempFile.exists()) tempFile.delete()
+
+        val ok = try {
+            FileOutputStream(tempFile).use { fos ->
+                decryptStreamToOutput(encryptedStream, fos, key, isGzipCompressed)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+
+        return if (ok && tempFile.exists() && tempFile.length() > 0) {
+            if (targetFile.exists()) targetFile.delete()
+            tempFile.renameTo(targetFile)
+            true
+        } else {
+            tempFile.delete()
             false
         }
     }

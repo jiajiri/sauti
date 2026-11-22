@@ -170,85 +170,85 @@ class ModelDownloadWorker(
 
                 val body = response.body?.string() ?: return Result.retry()
                 val json = JSONObject(body)
-                val modelsArray = json.optJSONArray("models") ?: return Result.retry()
 
-                for (i in 0 until modelsArray.length()) {
-                    val mObj = modelsArray.getJSONObject(i)
-                    val id           = mObj.optString("id")
-                    val filename     = mObj.optString("filename")
-                    val remoteUrl    = mObj.optString("remote_url")
-                    val expectedSha  = mObj.optString("sha256")
-                    val isCompressed = mObj.optBoolean("compressed", false)
-                    val targetFile   = File(sautiDir, filename)
+                // OPTION A: Single-request unified bundle (both Whisper Multilingual + Gemma 3 1B)
+                val bundleObj = json.optJSONObject("bundle")
+                if (bundleObj != null) {
+                    val bundleUrl = bundleObj.optString("remote_url")
+                    val isCompressed = bundleObj.optBoolean("compressed", true)
+                    val bundleEncFile = File(sautiDir, "bundle.bin.enc")
 
-                    // Determine model type: voice models (Whisper) use GGML, cores use GGUF
-                    val isVoiceModel = id.startsWith("voice")
-
-                    // Skip models that are already valid
-                    if (isModelReady(targetFile, isVoiceModel)) {
-                        Log.i(TAG, "Model '$id' already valid — skipping download.")
-                        continue
-                    }
-
-                    Log.i(TAG, "Starting resilient download for '$id' → $filename from $remoteUrl")
-
-                    // Step 1: Download the raw encrypted blob into a .enc.part file
-                    val encFile = File(sautiDir, "$filename.enc")
-                    val success = downloadWithResumption(remoteUrl, encFile, id)
+                    Log.i(TAG, "Executing single-request unified model bundle download from $bundleUrl...")
+                    val success = downloadWithResumption(bundleUrl, bundleEncFile, "Unified Models Bundle")
                     if (!success) {
-                        Log.w(TAG, "Download interrupted for '$id', saved progress for next retry.")
+                        Log.w(TAG, "Bundle download interrupted, progress saved for resumption.")
                         return Result.retry()
                     }
 
-                    // Step 2: Decrypt + decompress the downloaded blob into the final target file
-                    Log.i(TAG, "Decrypting '$id' (gzip=$isCompressed)...")
-                    val decryptOk = encFile.inputStream().use { stream ->
-                        ModelCryptoManager.decryptStream(
+                    Log.i(TAG, "Decrypting and extracting unified model archive...")
+                    val extracted = bundleEncFile.inputStream().use { stream ->
+                        ModelCryptoManager.decryptAndExtractZipStream(
                             encryptedStream = stream,
-                            targetFile = targetFile,
+                            targetDir = sautiDir,
                             key = key,
                             isGzipCompressed = isCompressed
                         )
                     }
+                    bundleEncFile.delete()
 
-                    // Clean up the intermediate encrypted blob regardless of outcome
-                    encFile.delete()
-
-                    if (!decryptOk) {
-                        Log.e(TAG, "Decryption failed for '$id' — purging and retrying.")
-                        targetFile.delete()
+                    if (extracted.isEmpty() || !hasVoiceAndCore(sautiDir)) {
+                        Log.e(TAG, "Unified bundle extraction failed or models invalid.")
                         return Result.retry()
                     }
 
-                    // Step 3: SHA-256 integrity verification of the plaintext model
-                    if (expectedSha.isNotBlank()) {
-                        Log.i(TAG, "Verifying SHA-256 for '$id'...")
-                        val actualSha = ModelCryptoManager.computeSha256(targetFile)
-                        if (actualSha != expectedSha) {
-                            Log.e(TAG, "SHA-256 mismatch for '$id': expected=$expectedSha actual=$actualSha")
+                    Log.i(TAG, "Unified bundle successfully extracted and verified: ${extracted.keys}")
+                } else {
+                    // OPTION B: Fallback to individual model entries
+                    val modelsArray = json.optJSONArray("models") ?: return Result.retry()
+                    for (i in 0 until modelsArray.length()) {
+                        val mObj = modelsArray.getJSONObject(i)
+                        val id           = mObj.optString("id")
+                        val filename     = mObj.optString("filename")
+                        val remoteUrl    = mObj.optString("remote_url")
+                        val expectedSha  = mObj.optString("sha256")
+                        val isCompressed = mObj.optBoolean("compressed", false)
+                        val targetFile   = File(sautiDir, filename)
+
+                        val isVoiceModel = id.startsWith("voice")
+                        if (isModelReady(targetFile, isVoiceModel)) {
+                            Log.i(TAG, "Model '$id' already valid — skipping download.")
+                            continue
+                        }
+
+                        Log.i(TAG, "Starting download for '$id' → $filename from $remoteUrl")
+                        val encFile = File(sautiDir, "$filename.enc")
+                        val success = downloadWithResumption(remoteUrl, encFile, id)
+                        if (!success) return Result.retry()
+
+                        val decryptOk = encFile.inputStream().use { stream ->
+                            ModelCryptoManager.decryptStream(
+                                encryptedStream = stream,
+                                targetFile = targetFile,
+                                key = key,
+                                isGzipCompressed = isCompressed
+                            )
+                        }
+                        encFile.delete()
+                        if (!decryptOk) return Result.retry()
+
+                        if (expectedSha.isNotBlank()) {
+                            val actualSha = ModelCryptoManager.computeSha256(targetFile)
+                            if (actualSha != expectedSha) {
+                                targetFile.delete()
+                                return Result.retry()
+                            }
+                        }
+
+                        if (!isModelReady(targetFile, isVoiceModel)) {
                             targetFile.delete()
                             return Result.retry()
                         }
-                        Log.i(TAG, "SHA-256 verified OK for '$id'")
                     }
-
-                    // Step 4: Confirm final file passes the correct magic check for its type
-                    if (!isModelReady(targetFile, isVoiceModel)) {
-                        val expectedFormat = if (isVoiceModel) "GGML (Whisper)" else "GGUF"
-                        Log.e(TAG, "Decrypted '$filename' is not a valid $expectedFormat — purging and retrying.")
-                        targetFile.delete()
-                        return Result.retry()
-                    }
-
-                    Log.i(TAG, "Model '$id' installed successfully: ${targetFile.length()} bytes")
-
-                    // Update progress to 100% for this model
-                    setProgress(workDataOf(
-                        "progress" to 100,
-                        "downloaded_mb" to (targetFile.length() / (1024 * 1024)),
-                        "total_mb" to (targetFile.length() / (1024 * 1024)),
-                        "model_name" to id
-                    ))
                 }
             }
 
@@ -270,6 +270,16 @@ class ModelDownloadWorker(
             Log.w(TAG, "Background sync paused or network disconnected: ${e.message}")
             return Result.retry()
         }
+    }
+
+    private fun hasVoiceAndCore(sautiDir: File): Boolean {
+        val voiceFile = File(sautiDir, "voice_lite.bin")
+        val voiceEnFile = File(sautiDir, "voice_en.bin")
+        val coreFile = File(sautiDir, "core_pro.bin")
+        val coreLiteFile = File(sautiDir, "core_lite.bin")
+        val hasVoice = isValidGgml(voiceFile) || isValidGgml(voiceEnFile)
+        val hasCore = isValidGguf(coreFile) || isValidGguf(coreLiteFile)
+        return hasVoice && hasCore
     }
 
     /**

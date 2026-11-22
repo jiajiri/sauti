@@ -17,9 +17,10 @@ import os
 import sys
 import json
 import gzip
+import zipfile
 import hashlib
 import argparse
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 try:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -126,12 +127,39 @@ def upload_file_to_r2(s3_client, local_path: str, bucket_name: str, object_key: 
     s3_client.upload_file(local_path, bucket_name, object_key)
     print(f"Successfully uploaded {object_key}!")
 
+def purge_bucket_objects(s3_client, bucket_name: str):
+    """
+    Purges legacy and stale model objects from Cloudflare R2 bucket.
+    """
+    print(f"\nScanning and purging old objects in bucket '{bucket_name}'...")
+    paginator = s3_client.get_paginator('list_objects_v2')
+    pages = paginator.paginate(Bucket=bucket_name)
+
+    delete_keys = []
+    for page in pages:
+        for obj in page.get('Contents', []):
+            delete_keys.append({'Key': obj['Key']})
+
+    if not delete_keys:
+        print("Bucket is already empty.")
+        return
+
+    # Delete in batches of 1000
+    for i in range(0, len(delete_keys), 1000):
+        batch = delete_keys[i:i + 1000]
+        print(f"Deleting batch of {len(batch)} objects from {bucket_name}...")
+        s3_client.delete_objects(Bucket=bucket_name, Delete={'Objects': batch})
+
+    print("Bucket purge completed successfully.\n")
+
 def main():
     parser = argparse.ArgumentParser(description="Package, encrypt, compress, and upload Sauti models to Cloudflare R2")
     parser.add_argument("--dry-run", action="store_true", help="Package and encrypt locally without uploading to R2")
     parser.add_argument("--upload", action="store_true", help="Upload generated models and manifest to Cloudflare R2")
+    parser.add_argument("--purge-bucket", action="store_true", help="Purge all legacy objects in R2 bucket before uploading")
     parser.add_argument("--no-compress", action="store_true", help="Skip gzip compression of encrypted models")
-    parser.add_argument("--version", type=str, default="1.0.0", help="Model distribution release version")
+    parser.add_argument("--bundle", action="store_true", default=True, help="Create a unified multi-model bundle for single-request download")
+    parser.add_argument("--version", type=str, default="2.1.0", help="Model distribution release version")
     args = parser.parse_args()
 
     # Load .env if present
@@ -197,6 +225,45 @@ def main():
 
     processed_files = []
 
+    # If --bundle is enabled and both core and voice are present, build unified bundle
+    voice_map = next((m for m in model_mappings if m["id"] == "voice_en" or m["id"] == "voice_sw"), None)
+    core_map = next((m for m in model_mappings if m["id"] == "core_pro"), None)
+
+    if args.bundle and voice_map and core_map and os.path.exists(voice_map["source"]) and os.path.exists(core_map["source"]):
+        bundle_tar_path = os.path.join(OUTPUT_DIR, "bundle.zip")
+        print(f"\nCreating unified multi-model zip bundle: {bundle_tar_path}...")
+        with zipfile.ZipFile(bundle_tar_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.write(voice_map["source"], arcname=voice_map["output_filename"])
+            zf.write(core_map["source"], arcname=core_map["output_filename"])
+
+        enc_bundle_target = os.path.join(OUTPUT_DIR, "bundle.bin.enc")
+        bundle_res = encrypt_and_compress_file(
+            input_path=bundle_tar_path,
+            output_path=enc_bundle_target,
+            key=key,
+            compress=not args.no_compress
+        )
+        if os.path.exists(bundle_tar_path):
+            os.remove(bundle_tar_path)
+
+        bundle_filename = os.path.basename(bundle_res["final_path"])
+        bundle_r2_key = f"models/v{args.version}/{bundle_filename}"
+        bundle_public_url = f"{custom_domain}/{bundle_r2_key}"
+
+        manifest["bundle"] = {
+            "remote_url": bundle_public_url,
+            "sha256": bundle_res["plain_sha256"],
+            "encrypted_sha256": bundle_res["encrypted_sha256"],
+            "size_bytes": bundle_res["encrypted_size_bytes"],
+            "plain_size_bytes": bundle_res["plain_size_bytes"],
+            "compressed": bundle_res["compressed"],
+            "models": [
+                {"id": voice_map["id"], "filename": voice_map["output_filename"], "format": "ggml"},
+                {"id": core_map["id"], "filename": core_map["output_filename"], "format": "gguf"}
+            ]
+        }
+        processed_files.append((bundle_res["final_path"], bundle_r2_key))
+
     for m in model_mappings:
         src = m["source"]
         if not os.path.exists(src):
@@ -239,6 +306,9 @@ def main():
 
     if args.upload and not args.dry_run:
         s3 = load_r2_client()
+        if args.purge_bucket:
+            purge_bucket_objects(s3, bucket_name)
+
         for local_file, r2_key in processed_files:
             upload_file_to_r2(s3, local_file, bucket_name, r2_key)
 
