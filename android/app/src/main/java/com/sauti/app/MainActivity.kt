@@ -120,6 +120,7 @@ class MainActivity : ComponentActivity() {
         val prefs = com.sauti.app.settings.SautiPreferencesStore(this)
 
         com.sauti.app.sauti.SautiEngineLoader.customUserInstructions = prefs.customInstructions
+        com.sauti.app.sauti.SautiEngineLoader.applyInferenceParams(prefs)
 
         setContent {
             val viewModel: SautiNavigationViewModel = viewModel(

@@ -395,6 +395,12 @@ object SautiEngineLoader {
         val words = clean.split("\\s+".toRegex()).map { it.trim('.', ',', '!', '?', ';', ':', '"', '\'', '(', ')') }
         if (words.isEmpty()) return "en"
 
+        // High-confidence English greeting anchors (must never trigger Swahili mode)
+        val enGreetings = setOf("hello", "hi", "hey", "howdy", "morning", "evening", "afternoon", "thanks", "thank", "welcome")
+        if (words.any { enGreetings.contains(it) }) {
+            return "en"
+        }
+
         val swWords = setOf(
             "habari", "hujambo", "sijambo", "naomba", "tafadhali", "nifundishe", "misemo", "kazi",
             "barua", "mambo", "vipi", "nini", "gani", "kwa", "katika", "yangu", "yake", "wangu",
@@ -406,22 +412,23 @@ object SautiEngineLoader {
             "the", "is", "are", "and", "in", "to", "what", "how", "why", "when", "where", "who",
             "which", "can", "you", "please", "tell", "me", "write", "code", "issue", "troubleshoot",
             "for", "with", "about", "help", "good", "morning", "hello", "hi", "explain", "create",
-            "make", "give", "list", "does", "will", "would", "should", "could", "have", "from", "on"
+            "make", "give", "list", "does", "will", "would", "should", "could", "have", "from", "on",
+            "python", "kotlin", "java", "script", "file", "json", "bug", "fix", "error"
         )
 
         var swScore = 0.0f
         var enScore = 0.0f
 
-        val swPrefixes = listOf("ni", "wa", "tu", "ku", "ali", "ana", "ata", "wali", "wana", "wata")
+        val swPrefixes = listOf("nili", "nina", "nita", "wali", "wana", "wata", "tuli", "tuna", "tuta")
         for (w in words) {
-            if (swWords.contains(w)) swScore += 1.5f
+            if (swWords.contains(w)) swScore += 2.0f
             if (enWords.contains(w)) enScore += 1.5f
-            if (w.length >= 4 && swPrefixes.any { w.startsWith(it) }) {
-                swScore += 0.4f
+            if (w.length >= 5 && swPrefixes.any { w.startsWith(it) }) {
+                swScore += 0.8f
             }
         }
 
-        return if (swScore > enScore && swScore >= 1.0f) "sw" else "en"
+        return if (swScore > enScore && swScore >= 2.0f) "sw" else "en"
     }
 
     /**

@@ -116,6 +116,7 @@ fun ChatScreen(
     LaunchedEffect(isVoiceRecording) {
         if (isVoiceRecording) {
             liveTranscribedText = ""
+            var accumulatedSamples = 0
             if (audioRecorderManager.hasRecordPermission()) {
                 audioRecorderManager.startListening(
                     scope = coroutineScope,
@@ -123,18 +124,22 @@ fun ChatScreen(
                         liveVoiceAmplitude = amp.coerceIn(0.1f, 1.0f)
                     },
                     onAudioData = { pcmBuffer, length ->
+                        accumulatedSamples += length
                         com.sauti.app.sauti.SautiEngineLoader.pushAudioSamples(pcmBuffer, length)
                     }
                 )
             }
             while (isVoiceRecording) {
-                kotlinx.coroutines.delay(250)
-                try {
-                    val transcript = com.sauti.app.sauti.SautiEngineLoader.transcribeStreaming()
-                    if (transcript.isNotBlank()) {
-                        liveTranscribedText = transcript.trim()
-                    }
-                } catch (_: Exception) {}
+                kotlinx.coroutines.delay(400)
+                // Accumulate at least ~800ms of audio (12,800 samples @ 16kHz) before running Whisper inference
+                if (accumulatedSamples >= 12800) {
+                    try {
+                        val transcript = com.sauti.app.sauti.SautiEngineLoader.transcribeStreaming()
+                        if (transcript.isNotBlank()) {
+                            liveTranscribedText = transcript.trim()
+                        }
+                    } catch (_: Exception) {}
+                }
             }
         } else {
             audioRecorderManager.stopListening()

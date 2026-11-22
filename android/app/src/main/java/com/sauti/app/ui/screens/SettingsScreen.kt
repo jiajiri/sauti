@@ -533,6 +533,7 @@ fun SettingsScreen(
                             customInstructions = tempInstructions.trim()
                             prefs.customInstructions = customInstructions
                             viewModel?.updateCustomInstructions(customInstructions)
+                            viewModel?.syncEngineSettings()
                             showInstructionsDialog = false
                         },
                         modifier = Modifier.weight(1f),

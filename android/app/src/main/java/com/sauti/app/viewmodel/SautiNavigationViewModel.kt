@@ -133,6 +133,12 @@ class SautiNavigationViewModel(
         val clean = instructions.trim()
         prefs.customInstructions = clean
         _userProfile.value = _userProfile.value.copy(customInstructions = clean)
+        com.sauti.app.sauti.SautiEngineLoader.customUserInstructions = clean
+    }
+
+    fun syncEngineSettings() {
+        com.sauti.app.sauti.SautiEngineLoader.customUserInstructions = prefs.customInstructions
+        com.sauti.app.sauti.SautiEngineLoader.applyInferenceParams(prefs)
     }
 
     fun updateTheme(theme: com.sauti.app.settings.AppTheme) {

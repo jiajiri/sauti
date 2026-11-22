@@ -229,13 +229,13 @@ Java_com_sauti_app_SautiInputMethodService_nativeTranscribeStreaming(
 
     // Zero-hallucination Energy VAD Gate:
     // If the Root-Mean-Square (RMS) amplitude is below human speech threshold (silence/ambient noise),
-    // skip neural decoding entirely. This mathematically guarantees 0% silence hallucination.
+    // skip neural decoding entirely. Lowered threshold to 0.005 (~ -46 dBFS) to accommodate low-gain phone mics.
     double sum_sq = 0.0;
     for (float sample : pcm_float) {
         sum_sq += static_cast<double>(sample) * static_cast<double>(sample);
     }
     double rms = std::sqrt(sum_sq / static_cast<double>(pcm_float.size()));
-    if (rms < 0.015) { // Below -36 dBFS speech energy
+    if (rms < 0.005) { // Below -46 dBFS speech energy
         LOGI("Audio frame RMS (%.4f) below speech threshold; skipping inference (Silence Gate).", rms);
         return env->NewStringUTF("");
     }
@@ -248,8 +248,8 @@ Java_com_sauti_app_SautiInputMethodService_nativeTranscribeStreaming(
     wparams.n_threads = 4;
 
     // Strict anti-hallucination settings:
-    // 1. Cut off background silence & breathing (prevents "Asante kwa kutazama" loops)
-    wparams.no_speech_thold = 0.60f;
+    // 1. Cut off background silence & breathing
+    wparams.no_speech_thold = 0.50f;
     // 2. Reject low-confidence acoustic noise
     wparams.logprob_thold = -1.0f;
     // 3. Disable random creative temperature exploration
@@ -257,8 +257,12 @@ Java_com_sauti_app_SautiInputMethodService_nativeTranscribeStreaming(
     wparams.temperature_inc = 0.0f;
     // 4. Force single segment transcription for clean voice commands
     wparams.single_segment = true;
-    // 5. Explicit language locking
-    wparams.language = g_active_asr_language.c_str();
+    // 5. Language configuration: if set to "auto", pass nullptr for Whisper's native multilingual detection
+    if (g_active_asr_language.empty() || g_active_asr_language == "auto") {
+        wparams.language = nullptr;
+    } else {
+        wparams.language = g_active_asr_language.c_str();
+    }
     wparams.translate = false;
 
     if (whisper_full(g_whisper_context, wparams, pcm_float.data(), pcm_float.size()) != 0) {
